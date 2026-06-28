@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>B-17 Turret — 3D Prototype</title>
+  <title>B-17 — 3D Cockpit Preview</title>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; touch-action: none; font-family: "Courier New", monospace; }
     #c { display: block; width: 100vw; height: 100vh; }
@@ -12,14 +12,14 @@
     #tag { position: fixed; right: 12px; top: 10px; color: #e6b84d; font-weight: bold; font-size: 13px; opacity: .85; }
   </style>
   <script type="importmap">
-  { "imports": { "three": "../vendor/three.module.min.js" } }
+  { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
 </head>
 <body>
   <canvas id="c"></canvas>
-  <div id="hud">BANDITS DOWNED: <span id="score">0</span></div>
-  <div id="tag">B-17 TURRET · 3D PROTOTYPE</div>
-  <div id="hint">DRAG to swing the turret · TAP to fire</div>
-  <script type="module" src="./turret.js"></script>
+  <div id="hud">AIRSPEED: <span id="spd">180 mph</span></div>
+  <div id="tag">B-17 · 3D COCKPIT PREVIEW</div>
+  <div id="hint">Drag the red THROTTLE knob up/down to set power</div>
+  <script type="module" src="./js/g3d/main3d.js"></script>
 </body>
 </html>
