@@ -13,20 +13,22 @@ function circBtn(id, label, cx, cy, r, extra = {}) {
   return { id, label, cx, cy, r, x: cx - r, y: cy - r, w: r * 2, h: r * 2, shape: 'circle', ...extra };
 }
 
+// Stations laid out on a top-view B-17 silhouette (nose up, tail down).
 export function stationDiagramLayout(vp) {
-  const cx = Math.max(vp.w * 0.13, 78);
-  const cy = vp.h * 0.55;
-  const L = Math.min(vp.h * 0.19, vp.w * 0.12);
-  const r = Math.max(18, Math.min(vp.h, vp.w) * 0.043);
+  const cx = Math.max(vp.w * 0.135, 84);
+  const cy = vp.h * 0.54;
+  const L = Math.min(vp.h * 0.2, vp.w * 0.125);
+  const r = Math.max(15, Math.min(vp.h, vp.w) * 0.038);
+  const wingY = cy - L * 0.04;
   const pos = {
-    nose: [cx, cy - L],
-    top: [cx, cy - L * 0.35],
-    ball: [cx, cy + L * 0.18],
-    tail: [cx, cy + L],
-    waistL: [cx - L * 0.62, cy + L * 0.02],
-    waistR: [cx + L * 0.62, cy + L * 0.02],
+    nose: [cx, cy - L * 0.92],
+    top: [cx, cy - L * 0.42],
+    ball: [cx, cy + L * 0.16],
+    waistL: [cx - L * 0.34, cy + L * 0.5],
+    waistR: [cx + L * 0.34, cy + L * 0.5],
+    tail: [cx, cy + L * 0.95],
   };
-  return { cx, cy, L, r, pos };
+  return { cx, cy, L, r, wingY, pos };
 }
 
 export function fireButtonLayout(vp) {

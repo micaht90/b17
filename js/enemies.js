@@ -41,9 +41,12 @@ export function updateEnemies(state, dt) {
     }
   }
 
+  // Release queued spawns when due — but cap how many attack at once.
+  let live = state.fighters.filter((f) => f.dying <= 0).length;
   for (let i = state._spawnQueue.length - 1; i >= 0; i--) {
-    if (state._cruiseClock >= state._spawnQueue[i].due) {
+    if (state._cruiseClock >= state._spawnQueue[i].due && live < FIGHTER.maxConcurrent) {
       spawnFighter(state, state._spawnQueue[i].arc);
+      live++;
       state._spawnQueue.splice(i, 1);
     }
   }
