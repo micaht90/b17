@@ -43,12 +43,8 @@ overlay.addEventListener('pointerdown', (e) => {
 overlay.addEventListener('pointermove', (e) => {
   if (!dragging || e.pointerId !== pid) return;
   const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
-  if (onThrottle) {
-    state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
-  } else {
-    eng.camera.rotation.y = Math.max(baseYaw - cone, Math.min(baseYaw + cone, eng.camera.rotation.y - dx * 0.0035));
-    eng.camera.rotation.x = Math.max(basePitch - cone, Math.min(basePitch + cone, eng.camera.rotation.x - dy * 0.0035));
-  }
+  // Cockpit is a fixed forward view; drag only works the throttle.
+  if (onThrottle) state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
 });
 overlay.addEventListener('pointerup', (e) => { if (e.pointerId === pid) { dragging = false; pid = null; } });
 
