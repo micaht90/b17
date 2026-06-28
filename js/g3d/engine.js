@@ -54,28 +54,24 @@ export function createEngine(canvas) {
   scene.add(sun);
 
   // --- Soft cloud sprites -------------------------------------------------------
+  // Each cloud is a single soft, blurred billboard (avoids the hard-edged
+  // overlapping-blob artifacts). Slight tint variation for depth.
   const cloudTex = makeCloudTexture();
-  const cloudMat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.95, depthWrite: false });
   const clouds = [];
-  // A layer roughly at flight level, scattered around the bomber.
-  for (let i = 0; i < 70; i++) {
-    const puffs = 3 + (i % 4);
-    const group = new THREE.Group();
-    const cx = (Math.random() - 0.5) * 5000;
-    const cy = -40 + Math.random() * 220;
-    const cz = (Math.random() - 0.5) * 5000;
-    for (let p = 0; p < puffs; p++) {
-      const s = new THREE.Sprite(cloudMat);
-      const sc = 220 + Math.random() * 260;
-      s.scale.set(sc, sc * 0.62, 1);
-      s.position.set((Math.random() - 0.5) * sc * 1.3, (Math.random() - 0.5) * sc * 0.3, (Math.random() - 0.5) * sc * 1.3);
-      group.add(s);
-    }
-    group.position.set(cx, cy, cz);
-    scene.add(group);
-    clouds.push(group);
+  function makeCloud(scale, tint) {
+    const mat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.9, depthWrite: false, color: tint });
+    const s = new THREE.Sprite(mat);
+    s.scale.set(scale, scale * 0.58, 1);
+    return s;
   }
-  // Distant undercast deck.
+  // Scattered cumulus around flight level.
+  for (let i = 0; i < 44; i++) {
+    const sc = 360 + Math.random() * 420;
+    const s = makeCloud(sc, new THREE.Color().setHSL(0.6, 0.05, 0.92 + Math.random() * 0.06));
+    s.position.set((Math.random() - 0.5) * 5200, -60 + Math.random() * 240, (Math.random() - 0.5) * 5200);
+    scene.add(s); clouds.push(s);
+  }
+  // Distant undercast deck + bigger, fainter cloud tops.
   const deck = new THREE.Mesh(
     new THREE.PlaneGeometry(16000, 16000),
     new THREE.MeshStandardMaterial({ color: '#aeb9bf', roughness: 1 }),
@@ -83,13 +79,11 @@ export function createEngine(canvas) {
   deck.rotation.x = -Math.PI / 2;
   deck.position.y = -650;
   scene.add(deck);
-  for (let i = 0; i < 50; i++) {
-    const s = new THREE.Sprite(cloudMat);
-    const sc = 500 + Math.random() * 700;
-    s.scale.set(sc, sc * 0.5, 1);
+  for (let i = 0; i < 34; i++) {
+    const s = makeCloud(900 + Math.random() * 800, 0xffffff);
+    s.material.opacity = 0.7;
     s.position.set((Math.random() - 0.5) * 12000, -600 + Math.random() * 80, (Math.random() - 0.5) * 12000);
-    scene.add(s);
-    clouds.push(s);
+    scene.add(s); clouds.push(s);
   }
 
   function resize() {
@@ -113,25 +107,30 @@ export function createEngine(canvas) {
   return { THREE, renderer, scene, camera, sunDir, resize, updateClouds, render: () => renderer.render(scene, camera) };
 }
 
-// Soft, fluffy cloud puff drawn to a canvas texture.
+// One soft, blurred cumulus puff on a canvas texture — heavy blur keeps the
+// edges smooth so the billboards read as fluffy cloud, not hard blobs.
 function makeCloudTexture() {
+  const N = 512;
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = c.height = N;
   const ctx = c.getContext('2d');
-  const cx = 128, cy = 128;
-  // Several overlapping soft blobs for an irregular fluffy edge.
-  for (let i = 0; i < 14; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * 70;
-    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.6;
-    const rad = 40 + Math.random() * 55;
+  ctx.filter = 'blur(14px)';
+  const cx = N / 2, cy = N / 2;
+  // A flat-bottomed cumulus: lumps along the top, soft and low-alpha so they
+  // accumulate into a smooth body.
+  for (let i = 0; i < 11; i++) {
+    const x = cx + (Math.random() - 0.5) * 200;
+    const y = cy - 30 + (Math.random() - 0.5) * 70;
+    const rad = 70 + Math.random() * 90;
     const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-    g.addColorStop(0, 'rgba(255,255,255,0.5)');
+    g.addColorStop(0, 'rgba(255,255,255,0.22)');
     g.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.filter = 'none';
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = true;
   return tex;
 }
