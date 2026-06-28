@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 
-export function createEngine(canvas) {
+export function createEngine(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -71,14 +71,16 @@ export function createEngine(canvas) {
     s.position.set((Math.random() - 0.5) * 5200, -60 + Math.random() * 240, (Math.random() - 0.5) * 5200);
     scene.add(s); clouds.push(s);
   }
-  // Distant undercast deck + bigger, fainter cloud tops.
-  const deck = new THREE.Mesh(
-    new THREE.PlaneGeometry(16000, 16000),
-    new THREE.MeshStandardMaterial({ color: '#aeb9bf', roughness: 1 }),
-  );
-  deck.rotation.x = -Math.PI / 2;
-  deck.position.y = -650;
-  scene.add(deck);
+  // Distant undercast deck (skipped when a real terrain is used below).
+  if (opts.deck !== false) {
+    const deck = new THREE.Mesh(
+      new THREE.PlaneGeometry(16000, 16000),
+      new THREE.MeshStandardMaterial({ color: '#aeb9bf', roughness: 1 }),
+    );
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.y = -650;
+    scene.add(deck);
+  }
   for (let i = 0; i < 34; i++) {
     const s = makeCloud(900 + Math.random() * 800, 0xffffff);
     s.material.opacity = 0.7;
