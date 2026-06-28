@@ -33,7 +33,7 @@ export const COLORS = {
 
 export const GAME = {
   // Route pacing
-  cruiseSpeed: 2.6,           // mission "distance units" per second (slower mission)
+  cruiseSpeed: 2.0,           // mission "distance units" per second (slow, deliberate)
 
   // Resources / weight
   fuelBurnPerSec: 0.95,
@@ -67,9 +67,10 @@ export const GUN = {
 
 // Fighter attack-run behaviour.
 export const FIGHTER = {
-  ingressSpeed: 0.17,    // approach progress t/sec (slow, gives time to engage)
+  ingressSpeed: 0.11,    // approach progress t/sec (slow, lots of time to react)
+  maxConcurrent: 2,      // never more than this attacking at once
   passAt: 0.82,          // t where the firing pass begins
-  warnTime: 0.7,         // telegraph (sec) before the first shot of a pass
+  warnTime: 1.1,         // telegraph (sec) before the first shot of a pass
   shotsPerPass: 3,
   shotInterval: 0.34,
   shotHitChance: 0.6,    // chance an unanswered pass-shot connects

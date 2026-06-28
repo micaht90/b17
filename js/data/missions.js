@@ -23,16 +23,16 @@ export const MISSIONS = [
     cruiseAltitude: 25000,
     minAltitudeToProceed: 18000,
 
-    // Fewer fighters, well spaced — passes you can actually track and answer.
+    // Sparse, well-spaced single fighters (a concurrent cap keeps it calm).
+    // The first wave holds off so you take off and settle in the cockpit first.
     waves: [
-      { at: 8,  arc: 'FRONT', count: 1, interval: 2.5 },
-      { at: 18, arc: 'HIGH',  count: 2, interval: 3.0 },
-      { at: 30, arc: 'REAR',  count: 1, interval: 2.5 },
-      { at: 42, arc: 'LEFT',  count: 1, interval: 2.5 },
-      { at: 50, arc: 'RIGHT', count: 1, interval: 2.5 },
-      { at: 70, arc: 'LOW',   count: 2, interval: 3.0 },
-      { at: 82, arc: 'FRONT', count: 1, interval: 2.5 },
-      { at: 90, arc: 'HIGH',  count: 1, interval: 2.5 },
+      { at: 24, arc: 'FRONT', count: 1 },
+      { at: 36, arc: 'HIGH',  count: 1 },
+      { at: 47, arc: 'LEFT',  count: 1 },
+      { at: 54, arc: 'RIGHT', count: 1 },
+      { at: 74, arc: 'REAR',  count: 1 },
+      { at: 84, arc: 'LOW',   count: 1 },
+      { at: 92, arc: 'FRONT', count: 1 },
     ],
 
     flakZones: [{ from: 66, to: 96, intensity: 0.7 }],

@@ -131,7 +131,11 @@ export function update(state, vp, dt, frame) {
   updateRadio(state, dt);
   switch (state.phase) {
     case PHASE.BRIEFING:
-      if (frame.tappedButton === 'takeoff') enterCruise(state);
+      if (frame.tappedButton === 'takeoff') {
+        enterCruise(state);
+        state.activeStation = 'pilot';   // begin in the pilot's seat
+        pushRadio(state, 'Wheels up — climbing out. Watch your throttle.', 'info');
+      }
       break;
     case PHASE.CRUISE:
       updateCruise(state, vp, dt, frame);

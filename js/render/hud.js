@@ -76,20 +76,58 @@ export function drawHUD(ctx, state, vp) {
   drawRadio(ctx, state, vp);
 }
 
+function drawPlaneSilhouette(ctx, dia) {
+  const { cx, cy, L, wingY } = dia;
+  ctx.fillStyle = 'rgba(110,124,140,0.55)';
+  ctx.strokeStyle = 'rgba(160,175,190,0.5)';
+  ctx.lineWidth = 1.5;
+
+  // Wings (tapered, full span) with 4 engine nacelles.
+  ctx.beginPath();
+  ctx.moveTo(cx - L * 0.98, wingY + L * 0.05);
+  ctx.lineTo(cx - L * 0.2, wingY - L * 0.12);
+  ctx.lineTo(cx + L * 0.2, wingY - L * 0.12);
+  ctx.lineTo(cx + L * 0.98, wingY + L * 0.05);
+  ctx.lineTo(cx + L * 0.2, wingY + L * 0.14);
+  ctx.lineTo(cx - L * 0.2, wingY + L * 0.14);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tailplane (horizontal stabilizer).
+  ctx.beginPath();
+  ctx.moveTo(cx - L * 0.42, cy + L * 0.82);
+  ctx.lineTo(cx + L * 0.42, cy + L * 0.82);
+  ctx.lineTo(cx + L * 0.16, cy + L * 0.95);
+  ctx.lineTo(cx - L * 0.16, cy + L * 0.95);
+  ctx.closePath();
+  ctx.fill();
+
+  // Fuselage (nose taper -> body -> tail).
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - L * 1.05);
+  ctx.quadraticCurveTo(cx + L * 0.16, cy - L * 0.7, cx + L * 0.15, cy);
+  ctx.quadraticCurveTo(cx + L * 0.13, cy + L * 0.85, cx + L * 0.05, cy + L * 1.05);
+  ctx.lineTo(cx - L * 0.05, cy + L * 1.05);
+  ctx.quadraticCurveTo(cx - L * 0.13, cy + L * 0.85, cx - L * 0.15, cy);
+  ctx.quadraticCurveTo(cx - L * 0.16, cy - L * 0.7, cx, cy - L * 1.05);
+  ctx.closePath();
+  ctx.fill();
+
+  // Engine nacelles on the wings.
+  ctx.fillStyle = 'rgba(70,82,95,0.85)';
+  for (const ex of [-0.72, -0.42, 0.42, 0.72]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + L * ex, wingY - L * 0.04, L * 0.07, L * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 export function drawPlaneDiagram(ctx, state, vp) {
   const dia = stationDiagramLayout(vp);
   const threats = arcsUnderThreat(state);
   const pulse = (Math.sin(performance.now() / 150) + 1) / 2;
 
-  ctx.strokeStyle = COLORS.hudDim;
-  ctx.lineWidth = Math.max(6, dia.r * 0.7);
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(dia.cx, dia.cy - dia.L);
-  ctx.lineTo(dia.cx, dia.cy + dia.L);
-  ctx.moveTo(dia.cx - dia.L * 0.62, dia.cy);
-  ctx.lineTo(dia.cx + dia.L * 0.62, dia.cy);
-  ctx.stroke();
+  drawPlaneSilhouette(ctx, dia);
 
   ctx.font = `bold ${Math.max(9, dia.r * 0.5)}px "Courier New", monospace`;
   ctx.textAlign = 'center';

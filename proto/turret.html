@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>B-17 Turret — 3D Prototype</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; touch-action: none; font-family: "Courier New", monospace; }
+    #c { display: block; width: 100vw; height: 100vh; }
+    #hud { position: fixed; left: 12px; top: 10px; color: #dfeaf2; text-shadow: 0 1px 2px #000; font-weight: bold; font-size: 14px; }
+    #hint { position: fixed; left: 0; right: 0; bottom: 14px; text-align: center; color: #cdd9e3; text-shadow: 0 1px 2px #000; font-size: 13px; }
+    #tag { position: fixed; right: 12px; top: 10px; color: #e6b84d; font-weight: bold; font-size: 13px; opacity: .85; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "./vendor/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">BANDITS DOWNED: <span id="score">0</span></div>
+  <div id="tag">B-17 TURRET · 3D PROTOTYPE</div>
+  <div id="hint">DRAG to swing the turret · TAP to fire</div>
+  <script type="module" src="./turret.js"></script>
+</body>
+</html>
