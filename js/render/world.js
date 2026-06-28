@@ -3,7 +3,7 @@
 
 import { COLORS, GUN, GUNS } from '../config.js';
 import { activeArc, STATION_BY_ID } from '../stations.js';
-import { projectFighter } from '../enemies.js';
+import { projectFighter, arcsUnderThreat } from '../enemies.js';
 import { currentSpread } from '../combat.js';
 import { drawShape, SHAPE_NAMES } from '../targets.js';
 import { bombsightY, buildingScreenY } from '../bombing.js';
@@ -83,6 +83,7 @@ export function drawCruise(ctx, state, vp) {
   drawSeatFrame(ctx, state, vp, arc);
   drawGunsAndReticle(ctx, state, vp);
   drawStationLabel(ctx, state, vp, arc);
+  drawThreatArrows(ctx, state, vp, arc);
 
   if (state.hitFlash > 0) {
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75);
@@ -150,37 +151,68 @@ function drawDriftClouds(ctx, state, vp, baseY, count, alpha, speedMul = 1) {
   ctx.globalAlpha = 1;
 }
 
+// An enemy fighter seen head-on, DIVING toward the gunner: prop disc and engine
+// cowl point at the viewer (down/near), canopy and tail away (up/far).
 function drawFighter(ctx, x, y, s, f) {
+  // Smoke trail streaming up/behind a damaged fighter.
   if (f.hp < GUN.fighterHp) {
     ctx.fillStyle = COLORS.smoke;
     for (let i = 1; i <= 3; i++) {
-      ctx.globalAlpha = 0.4 / i;
+      ctx.globalAlpha = 0.45 / i;
       ctx.beginPath();
-      ctx.arc(x - i * s * 0.35, y + i * s * 0.3, s * 0.28 * i, 0, Math.PI * 2);
+      ctx.arc(x + (f.bank || 0) * i * s * 0.2, y - i * s * 0.5, s * 0.26 * i, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
+
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate((f.bank || 0) * 0.35);
+  ctx.rotate((f.bank || 0) * 0.4);
+
+  // Tailplane + fin (far side, up).
   ctx.fillStyle = COLORS.fighter;
+  ctx.fillRect(-s * 0.3, -s * 0.62, s * 0.6, s * 0.1);
+  ctx.fillRect(-s * 0.05, -s * 0.72, s * 0.1, s * 0.16);
+
+  // Wings (full span, slight gull).
   ctx.beginPath();
-  ctx.moveTo(-s, 0); ctx.lineTo(s, 0);
-  ctx.lineTo(s * 0.16, -s * 0.16); ctx.lineTo(-s * 0.16, -s * 0.16);
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, s * 0.17, s * 0.5, 0, 0, Math.PI * 2);
+  ctx.moveTo(-s * 1.05, s * 0.02);
+  ctx.quadraticCurveTo(0, -s * 0.14, s * 1.05, s * 0.02);
+  ctx.quadraticCurveTo(s * 0.5, s * 0.16, 0, s * 0.1);
+  ctx.quadraticCurveTo(-s * 0.5, s * 0.16, -s * 1.05, s * 0.02);
   ctx.fill();
-  ctx.fillRect(-s * 0.24, s * 0.34, s * 0.48, s * 0.12);
+
+  // Fuselage.
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s * 0.2, s * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Canopy (on top, toward the tail).
   ctx.fillStyle = COLORS.fighterCanopy;
   ctx.beginPath();
-  ctx.ellipse(0, -s * 0.12, s * 0.09, s * 0.16, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -s * 0.2, s * 0.12, s * 0.2, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // Engine cowl + spinning prop disc at the nose (toward viewer).
+  ctx.fillStyle = '#11151a';
+  ctx.beginPath();
+  ctx.ellipse(0, s * 0.46, s * 0.24, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(190,198,206,0.16)';
+  ctx.beginPath();
+  ctx.ellipse(0, s * 0.5, s * 0.6, s * 0.62, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = COLORS.fighterAccent;
+  ctx.beginPath();
+  ctx.arc(0, s * 0.52, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wing-gun muzzle flashes during a firing pass.
   if (f.muzzle > 0) {
     ctx.fillStyle = COLORS.tracer;
-    ctx.beginPath(); ctx.arc(-s * 0.4, -s * 0.05, s * 0.12, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.4, -s * 0.05, s * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-s * 0.5, s * 0.04, s * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.5, s * 0.04, s * 0.13, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
@@ -341,6 +373,45 @@ function drawGunsAndReticle(ctx, state, vp) {
   drawRingSight(ctx, cx, cy, jam ? COLORS.crosshairJam : COLORS.crosshair, currentSpread(state));
 }
 
+// Pulsing edge arrows pointing toward arcs that have attacking fighters you're
+// NOT currently manning — so you can see where they're coming from.
+function drawThreatArrows(ctx, state, vp, activeArcName) {
+  const W = vp.w, H = vp.h;
+  const threats = arcsUnderThreat(state);
+  if (!threats.size) return;
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 140);
+  const anchors = {
+    FRONT: { x: W / 2, y: H * 0.13, dir: 'up' },
+    HIGH: { x: W * 0.3, y: H * 0.13, dir: 'up' },
+    REAR: { x: W / 2, y: H * 0.87, dir: 'down' },
+    LOW: { x: W * 0.7, y: H * 0.87, dir: 'down' },
+    LEFT: { x: W * 0.07, y: H * 0.5, dir: 'left' },
+    RIGHT: { x: W * 0.93, y: H * 0.5, dir: 'right' },
+  };
+  for (const arc of threats) {
+    if (arc === activeArcName) continue;
+    const a = anchors[arc];
+    if (!a) continue;
+    const sz = Math.max(18, H * 0.04);
+    ctx.fillStyle = `rgba(224,88,74,${pulse})`;
+    ctx.strokeStyle = `rgba(255,255,255,${0.6 * pulse})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (a.dir === 'up') { ctx.moveTo(a.x, a.y - sz); ctx.lineTo(a.x - sz * 0.8, a.y + sz * 0.5); ctx.lineTo(a.x + sz * 0.8, a.y + sz * 0.5); }
+    else if (a.dir === 'down') { ctx.moveTo(a.x, a.y + sz); ctx.lineTo(a.x - sz * 0.8, a.y - sz * 0.5); ctx.lineTo(a.x + sz * 0.8, a.y - sz * 0.5); }
+    else if (a.dir === 'left') { ctx.moveTo(a.x - sz, a.y); ctx.lineTo(a.x + sz * 0.5, a.y - sz * 0.8); ctx.lineTo(a.x + sz * 0.5, a.y + sz * 0.8); }
+    else { ctx.moveTo(a.x + sz, a.y); ctx.lineTo(a.x - sz * 0.5, a.y - sz * 0.8); ctx.lineTo(a.x - sz * 0.5, a.y + sz * 0.8); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = `rgba(255,210,200,${pulse})`;
+    ctx.font = `bold ${Math.max(11, H * 0.024)}px "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    const ly = a.dir === 'down' ? a.y - sz - 6 : a.y + sz + H * 0.03;
+    ctx.fillText(BEARING[arc], a.x, ly);
+    ctx.textAlign = 'left';
+  }
+}
+
 function drawStationLabel(ctx, state, vp, arc) {
   const W = vp.w, H = vp.h;
   const st = state.stations[state.activeStation];
@@ -356,26 +427,88 @@ function drawStationLabel(ctx, state, vp, arc) {
 
 // --- Bomb run ----------------------------------------------------------------
 
+// An aerial reconnaissance-style map below the bombsight: patchwork fields, a
+// winding river, roads. Features are placed in the same world space as the
+// buildings (screenY = cy + worldY - scroll) so everything scrolls together.
+function drawAerialMap(ctx, state, vp) {
+  const W = vp.w, H = vp.h;
+  const scroll = state.bomb.scroll;
+  const cy = bombsightY(vp);
+  const toY = (wy) => cy + (wy - scroll);
+
+  ctx.fillStyle = '#6e7b4c';
+  ctx.fillRect(0, 0, W, H);
+
+  // Patchwork fields.
+  const cell = Math.max(70, H * 0.16);
+  const pal = ['#7c8a50', '#93a05f', '#b3ab73', '#67753f', '#a89a6a', '#5d6b3a', '#8a9657', '#9caa66'];
+  const top = scroll - cy - cell, bot = scroll - cy + H + cell;
+  for (let gyc = Math.floor(top / cell); gyc <= Math.ceil(bot / cell); gyc++) {
+    const sy = toY(gyc * cell);
+    for (let gx = -1; gx * cell < W + cell; gx++) {
+      const k = gx * 97 + gyc * 191;
+      ctx.fillStyle = pal[((k % pal.length) + pal.length) % pal.length];
+      ctx.fillRect(gx * cell + (Math.abs(gyc) % 2) * cell * 0.5, sy, cell - 3, cell - 3);
+    }
+  }
+
+  // River.
+  ctx.strokeStyle = '#4d6f93';
+  ctx.lineWidth = Math.max(10, W * 0.018);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let wy = top; wy <= bot; wy += 24) {
+    const x = W * 0.28 + Math.sin(wy * 0.004) * W * 0.16;
+    wy === top ? ctx.moveTo(x, toY(wy)) : ctx.lineTo(x, toY(wy));
+  }
+  ctx.stroke();
+
+  // Roads (a winding lane + a couple of cross-roads).
+  ctx.strokeStyle = 'rgba(64,62,56,0.9)';
+  ctx.lineWidth = Math.max(3, W * 0.006);
+  ctx.beginPath();
+  for (let wy = top; wy <= bot; wy += 24) {
+    const x = W * 0.66 + Math.sin(wy * 0.002 + 1) * W * 0.05;
+    wy === top ? ctx.moveTo(x, toY(wy)) : ctx.lineTo(x, toY(wy));
+  }
+  ctx.stroke();
+  for (const ry of [Math.floor(scroll / 320) * 320, Math.floor(scroll / 320) * 320 + 320]) {
+    ctx.beginPath(); ctx.moveTo(0, toY(ry)); ctx.lineTo(W, toY(ry) + 22); ctx.stroke();
+  }
+}
+
+// A speckle of small buildings around a structure, so it reads as a town and
+// the briefed target must be picked out from it.
+function drawTownCluster(ctx, x, y, s, seed) {
+  ctx.fillStyle = '#565a4b';
+  for (let i = 0; i < 12; i++) {
+    const a = seed * 0.7 + i * 1.7;
+    const dx = Math.sin(a) * s * 2.4;
+    const dy = Math.cos(a * 1.3) * s * 2.0;
+    const w = s * (0.28 + 0.28 * Math.abs(Math.sin(a * 2.1)));
+    ctx.fillRect(x + dx, y + dy, w, w * 0.78);
+  }
+}
+
 export function drawBombRun(ctx, state, vp) {
   const W = vp.w, H = vp.h;
   const bomb = state.bomb;
   const cy = bombsightY(vp);
 
-  ctx.fillStyle = COLORS.ground;
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = COLORS.groundDark;
-  ctx.lineWidth = 2;
-  const slide = bomb.scroll % 70;
-  for (let yy = -slide; yy < H; yy += 70) {
-    ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke();
-  }
+  drawAerialMap(ctx, state, vp);
 
-  const bsize = Math.max(12, H * 0.03);
+  // Target + decoys as map structures, each sitting in a little town.
+  const bsize = Math.max(15, H * 0.042);
   for (const b of bomb.buildings) {
     const y = buildingScreenY(state, b, vp);
-    if (y < -120 || y > H + 120) continue;
+    if (y < -150 || y > H + 150) continue;
     const x = W / 2 + b.lane * W * 0.4;
-    drawShape(ctx, b.shape, x, y, bsize, COLORS.groundDark);
+    drawTownCluster(ctx, x, y, bsize, b.pos);
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    drawShape(ctx, b.shape, x + 4, y + 5, bsize, '#0e120c'); // drop shadow
+    ctx.restore();
+    drawShape(ctx, b.shape, x, y, bsize, b.isTarget ? '#39352c' : '#46473c');
   }
 
   ctx.strokeStyle = 'rgba(255,255,255,0.85)';
