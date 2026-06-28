@@ -2,16 +2,20 @@
 // spread that blooms with sustained fire/heat/recoil, and barrel overheating
 // with jams. Bullets hit where pointed (within spread) — no leading needed.
 
-import { GUN, DAMAGE } from './config.js';
+import { GUN, DAMAGE, GUNS, TWIN_RATE_MULT, CONTROL } from './config.js';
 import { clampToTraverse } from './stations.js';
 import { projectFighter, killFighter, activeFighters } from './enemies.js';
+
+export function isGunView(state) {
+  return !!state.stations[state.activeStation];
+}
 
 export function updateCrosshair(state, vp, dt) {
   if (state.crosshair.x === 0 && state.crosshair.y === 0) {
     state.crosshair.x = vp.w / 2;
     state.crosshair.y = vp.h * 0.42;
   }
-  if (!state.aim.has) return;
+  if (!isGunView(state) || !state.aim.has) return;
 
   const clamped = clampToTraverse(state.activeStation, state.aim.x, state.aim.y, vp);
   const a = 1 - Math.pow(1 - GUN.aimLerp, dt * 60);
@@ -22,8 +26,10 @@ export function updateCrosshair(state, vp, dt) {
 // Current shot-spread radius in px for the active gun.
 export function currentSpread(state) {
   const st = state.stations[state.activeStation];
+  if (!st) return GUN.spreadPx;
   let s = GUN.spreadPx + state.gunBloom + st.heat * GUN.spreadPerHeat;
   if (st.wounded) s *= DAMAGE.gunnerSpreadPenalty;
+  if (state.evade.active > 0) s *= CONTROL.evadeAimPenalty;
   return s;
 }
 
@@ -49,12 +55,13 @@ export function updateFiring(state, vp, dt, firing) {
   }
 
   state.fireCooldown -= dt;
-  if (!firing) return;
+  if (!firing || !isGunView(state)) return;
 
   const st = state.stations[state.activeStation];
   if (st.disabled || st.jammed) return;
 
-  const rate = GUN.fireRate * (st.wounded ? 1 - DAMAGE.gunnerFireRatePenalty : 1);
+  const twin = GUNS[state.activeStation] && GUNS[state.activeStation].type === 'twin';
+  const rate = GUN.fireRate * (twin ? TWIN_RATE_MULT : 1) * (st.wounded ? 1 - DAMAGE.gunnerFireRatePenalty : 1);
   while (state.fireCooldown <= 0) {
     state.fireCooldown += 1 / rate;
     if (st.ammo <= 0 || st.jammed) break;

@@ -21,8 +21,17 @@ export function createGameState(missionIndex = 0) {
 
     plane: { health: 100, altitude: 25000, fuel: 100, position: 0, bombsAboard: true },
 
-    // Airframe systems (damage model).
-    systems: { engines: [true, true, true, true], fuelLeak: 0 },
+    // Airframe systems (damage model). engineFire[i] true while that engine burns.
+    systems: { engines: [true, true, true, true], engineFire: [false, false, false, false], fuelLeak: 0 },
+
+    // Pilot controls.
+    throttle: 1.0,
+    evade: { active: 0, cooldown: 0 },
+    brace: 0,
+
+    // Crew radio feed + one-shot warning flags.
+    radio: [],
+    warned: { fuel: false, hull: false, flak: false, target: false },
 
     // Per-station: ammo + gun condition.
     stations: {},
@@ -71,7 +80,12 @@ export function resetMission(state, missionIndex = state.missionIndex) {
   state.plane.position = 0;
   state.plane.bombsAboard = true;
 
-  state.systems = { engines: Array(DAMAGE.engines).fill(true), fuelLeak: 0 };
+  state.systems = { engines: Array(DAMAGE.engines).fill(true), engineFire: Array(DAMAGE.engines).fill(false), fuelLeak: 0 };
+  state.throttle = 1.0;
+  state.evade = { active: 0, cooldown: 0 };
+  state.brace = 0;
+  state.radio = [];
+  state.warned = { fuel: false, hull: false, flak: false, target: false };
 
   state.stations = {};
   for (const s of STATIONS) {

@@ -13,16 +13,16 @@ export function computeWeight(state) {
   return 0.55 + fuelTerm + ammoTerm + bombTerm;
 }
 
-// Speed multiplier from engine losses (used by the cruise advance).
+// Speed multiplier from engine losses and throttle (used by the cruise advance).
 export function speedFactor(state) {
-  return Math.max(0.5, 1 - 0.12 * enginesOut(state));
+  return Math.max(0.5, 1 - 0.12 * enginesOut(state)) * state.throttle;
 }
 
 export function updateResources(state, dt) {
   state.weightFactor = computeWeight(state);
   const out = enginesOut(state);
   const burn =
-    GAME.fuelBurnPerSec * state.weightFactor * (1 + DAMAGE.engineFuelPenaltyEach * out) +
+    GAME.fuelBurnPerSec * state.weightFactor * state.throttle * (1 + DAMAGE.engineFuelPenaltyEach * out) +
     state.systems.fuelLeak;
   state.plane.fuel = Math.max(0, state.plane.fuel - burn * dt);
 }
