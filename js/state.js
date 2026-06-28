@@ -47,6 +47,7 @@ export function createGameState(missionIndex = 0) {
     // Active-gun firing state.
     fireCooldown: 0,
     gunBloom: 0,        // transient spread bloom (px) from recoil/sustained fire
+    muzzleFlash: 0,     // >0 briefly after each shot (foreground gun flash)
 
     // Feedback effects.
     shake: 0,
@@ -100,6 +101,7 @@ export function resetMission(state, missionIndex = state.missionIndex) {
   state.kills = 0;
   state.fireCooldown = 0;
   state.gunBloom = 0;
+  state.muzzleFlash = 0;
   state.shake = 0;
   state.hitFlash = 0;
 
