@@ -9,7 +9,7 @@ export function createEngine(canvas, opts = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 8000);
+  const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 8000);
 
   const sunDir = new THREE.Vector3(0.35, 0.5, -0.78).normalize();
 
@@ -53,24 +53,28 @@ export function createEngine(canvas, opts = {}) {
   sun.position.copy(sunDir).multiplyScalar(1000);
   scene.add(sun);
 
-  // --- Soft cloud sprites -------------------------------------------------------
-  // Each cloud is a single soft, blurred billboard (avoids the hard-edged
-  // overlapping-blob artifacts). Slight tint variation for depth.
+  // --- Clouds (clusters of soft white billboards) -------------------------------
+  // A smooth single-gradient puff texture + pure white sprites avoids the grainy
+  // colour artifacts; clustering a few per cloud gives a fluffy shape.
   const cloudTex = makeCloudTexture();
+  const cloudMat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false });
+  const cloudMatFar = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.6, depthWrite: false });
   const clouds = [];
-  function makeCloud(scale, tint) {
-    const mat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.9, depthWrite: false, color: tint });
-    const s = new THREE.Sprite(mat);
-    s.scale.set(scale, scale * 0.58, 1);
-    return s;
+  function cloud(mat, cx, cy, cz, base) {
+    const g = new THREE.Group();
+    const puffs = 3 + Math.floor(Math.random() * 3);
+    for (let p = 0; p < puffs; p++) {
+      const s = new THREE.Sprite(mat);
+      const sc = base * (0.6 + Math.random() * 0.7);
+      s.scale.set(sc, sc * 0.6, 1);
+      s.position.set((Math.random() - 0.5) * base * 1.1, (Math.random() - 0.5) * base * 0.22, (Math.random() - 0.5) * base * 1.1);
+      g.add(s);
+    }
+    g.position.set(cx, cy, cz);
+    scene.add(g); clouds.push(g);
   }
-  // Scattered cumulus around flight level.
-  for (let i = 0; i < 44; i++) {
-    const sc = 360 + Math.random() * 420;
-    const s = makeCloud(sc, new THREE.Color().setHSL(0.6, 0.05, 0.92 + Math.random() * 0.06));
-    s.position.set((Math.random() - 0.5) * 5200, -60 + Math.random() * 240, (Math.random() - 0.5) * 5200);
-    scene.add(s); clouds.push(s);
-  }
+  for (let i = 0; i < 40; i++) cloud(cloudMat, (Math.random() - 0.5) * 5200, -50 + Math.random() * 230, (Math.random() - 0.5) * 5200, 360 + Math.random() * 320);
+
   // Distant undercast deck (skipped when a real terrain is used below).
   if (opts.deck !== false) {
     const deck = new THREE.Mesh(
@@ -81,12 +85,7 @@ export function createEngine(canvas, opts = {}) {
     deck.position.y = -650;
     scene.add(deck);
   }
-  for (let i = 0; i < 34; i++) {
-    const s = makeCloud(900 + Math.random() * 800, 0xffffff);
-    s.material.opacity = 0.7;
-    s.position.set((Math.random() - 0.5) * 12000, -600 + Math.random() * 80, (Math.random() - 0.5) * 12000);
-    scene.add(s); clouds.push(s);
-  }
+  for (let i = 0; i < 28; i++) cloud(cloudMatFar, (Math.random() - 0.5) * 12000, -600 + Math.random() * 80, (Math.random() - 0.5) * 12000, 1100 + Math.random() * 700);
 
   function resize() {
     const w = innerWidth, h = innerHeight;
@@ -109,30 +108,20 @@ export function createEngine(canvas, opts = {}) {
   return { THREE, renderer, scene, camera, sunDir, resize, updateClouds, render: () => renderer.render(scene, camera) };
 }
 
-// One soft, blurred cumulus puff on a canvas texture — heavy blur keeps the
-// edges smooth so the billboards read as fluffy cloud, not hard blobs.
+// A single smooth white puff: one clean radial gradient, no banding/grain.
 function makeCloudTexture() {
-  const N = 512;
+  const N = 256;
   const c = document.createElement('canvas');
   c.width = c.height = N;
   const ctx = c.getContext('2d');
-  ctx.filter = 'blur(14px)';
-  const cx = N / 2, cy = N / 2;
-  // A flat-bottomed cumulus: lumps along the top, soft and low-alpha so they
-  // accumulate into a smooth body.
-  for (let i = 0; i < 11; i++) {
-    const x = cx + (Math.random() - 0.5) * 200;
-    const y = cy - 30 + (Math.random() - 0.5) * 70;
-    const rad = 70 + Math.random() * 90;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-    g.addColorStop(0, 'rgba(255,255,255,0.22)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.filter = 'none';
+  const g = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.45, 'rgba(255,255,255,0.5)');
+  g.addColorStop(0.75, 'rgba(255,255,255,0.16)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, N, N);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.generateMipmaps = true;
   return tex;
 }

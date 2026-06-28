@@ -28,21 +28,29 @@ function resizeOverlay() {
 addEventListener('resize', resizeOverlay);
 resizeOverlay();
 
-// --- Throttle drag ------------------------------------------------------------
-let grabbing = false, lastY = 0, pid = null;
+// --- Throttle drag + look-around ---------------------------------------------
+eng.camera.rotation.order = 'YXZ';
+const baseYaw = 0, basePitch = -0.05, cone = 0.5;
+let dragging = false, onThrottle = false, lastX = 0, lastY = 0, pid = null;
 function inThrottle(x, y) {
   const r = throttleRectScreen(W, H);
   return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
 overlay.addEventListener('pointerdown', (e) => {
-  if (inThrottle(e.clientX, e.clientY)) { grabbing = true; pid = e.pointerId; lastY = e.clientY; overlay.setPointerCapture(e.pointerId); }
+  dragging = true; pid = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+  onThrottle = inThrottle(e.clientX, e.clientY); overlay.setPointerCapture(e.pointerId);
 });
 overlay.addEventListener('pointermove', (e) => {
-  if (!grabbing || e.pointerId !== pid) return;
-  const dy = e.clientY - lastY; lastY = e.clientY;
-  state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
+  if (!dragging || e.pointerId !== pid) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
+  if (onThrottle) {
+    state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
+  } else {
+    eng.camera.rotation.y = Math.max(baseYaw - cone, Math.min(baseYaw + cone, eng.camera.rotation.y - dx * 0.0035));
+    eng.camera.rotation.x = Math.max(basePitch - cone, Math.min(basePitch + cone, eng.camera.rotation.x - dy * 0.0035));
+  }
 });
-overlay.addEventListener('pointerup', (e) => { if (e.pointerId === pid) { grabbing = false; pid = null; } });
+overlay.addEventListener('pointerup', (e) => { if (e.pointerId === pid) { dragging = false; pid = null; } });
 
 const spdEl = document.getElementById('spd');
 

@@ -23,12 +23,12 @@ export function loadCockpit(url) {
       // Cut the windscreen: bright, blue-ish pixels in the upper band -> clear.
       for (let y = 0; y < imgH; y++) {
         const yf = y / imgH;
-        if (yf < 0.04 || yf > 0.345) continue;
+        if (yf < 0.03 || yf > 0.36) continue;
         for (let xx = 0; xx < imgW; xx++) {
           const i = (y * imgW + xx) * 4;
           const r = p[i], g = p[i + 1], b = p[i + 2];
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-          if (lum > 110 && b >= r - 14) p[i + 3] = 0;
+          if (lum > 104 && b >= r - 16) p[i + 3] = 0;
         }
       }
       x.putImageData(d, 0, 0);
