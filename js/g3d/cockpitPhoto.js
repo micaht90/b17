@@ -43,41 +43,55 @@ export function loadCockpit(url) {
   });
 }
 
-// Fit the photo to the screen height, centered, so the full panel + throttle
-// always show; the side gaps are filled as dark fuselage.
+// Cover the whole (widescreen) viewport with the photo, centered.
 function layout(W, H) {
-  const s = H / imgH;
-  const w = imgW * s;
-  return { s, w, h: H, dx: (W - w) / 2, dy: 0 };
+  const s = Math.max(W / imgW, H / imgH);
+  const w = imgW * s, h = imgH * s;
+  return { s, w, h, dx: (W - w) / 2, dy: (H - h) / 2 };
 }
 
+// Throttle hotspot in screen px, clamped to stay on-screen even when cover
+// scaling crops the bottom of the photo.
 export function throttleRectScreen(W, H) {
   const L = layout(W, H);
-  return {
-    x: L.dx + THR.x0 * L.w, y: L.dy + THR.y0 * L.h,
-    w: (THR.x1 - THR.x0) * L.w, h: (THR.yIdle - THR.y0) * L.h, L,
-  };
+  const x = L.dx + THR.x0 * L.w;
+  const w = (THR.x1 - THR.x0) * L.w;
+  const top = Math.max(L.dy + THR.y0 * L.h, H * 0.22);
+  const bot = Math.min(L.dy + THR.yIdle * L.h, H * 0.95);
+  return { x, y: top, w, h: bot - top, L };
 }
 
 export function draw(ctx, W, H, state) {
   if (!masked) return;
   const L = layout(W, H);
   ctx.clearRect(0, 0, W, H);
-  // Dark fuselage in the side gaps (don't cover the windscreen — it's inside
-  // the photo and stays transparent so the 3D sky shows through).
-  ctx.fillStyle = '#05070a';
-  if (L.dx > 0) { ctx.fillRect(0, 0, L.dx + 1, H); ctx.fillRect(L.dx + L.w - 1, 0, W - (L.dx + L.w) + 1, H); }
+  // Side gaps only appear if the photo is narrower than the screen; with cover
+  // they don't, but fill defensively so nothing leaks through.
+  if (L.dx > 0) { ctx.fillStyle = '#05070a'; ctx.fillRect(0, 0, L.dx + 1, H); ctx.fillRect(L.dx + L.w - 1, 0, W - (L.dx + L.w) + 1, H); }
   ctx.drawImage(masked, L.dx, L.dy, L.w, L.h);
 
-  // Throttle handle (drag target) drawn over the quadrant.
+  // Throttle lever that visibly travels on a track over the quadrant.
   const frac = (state.throttle - 0.7) / 0.7;            // 0..1
-  const hy = L.dy + (THR.yIdle + (THR.yFull - THR.yIdle) * frac) * L.h;
   const hx = L.dx + ((THR.x0 + THR.x1) / 2) * L.w;
+  const baseY = Math.min(L.dy + THR.yIdle * L.h, H * 0.9);   // idle (clamped on-screen)
+  const topY = Math.max(L.dy + THR.yFull * L.h, H * 0.26);   // full power
+  const hy = baseY + (topY - baseY) * frac;
   ctx.save();
+  // track
+  ctx.strokeStyle = 'rgba(230,238,245,0.35)';
+  ctx.lineWidth = Math.max(3, W * 0.004);
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(hx, baseY); ctx.lineTo(hx, topY); ctx.stroke();
+  // lever stem
+  ctx.strokeStyle = '#1c2026'; ctx.lineWidth = Math.max(7, W * 0.011);
+  ctx.beginPath(); ctx.moveTo(hx, baseY); ctx.lineTo(hx, hy); ctx.stroke();
+  // knob
   ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
-  ctx.fillStyle = '#d24636';
-  ctx.beginPath(); ctx.ellipse(hx, hy, Math.max(16, W * 0.018), Math.max(11, W * 0.012), 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#ff7a68'; ctx.lineWidth = 2; ctx.stroke();
+  const rr = Math.max(17, W * 0.02);
+  const grd = ctx.createRadialGradient(hx - rr * 0.3, hy - rr * 0.3, rr * 0.2, hx, hy, rr);
+  grd.addColorStop(0, '#ff7a68'); grd.addColorStop(1, '#b5362a');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.ellipse(hx, hy, rr, rr * 0.82, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 
   // Live readouts (top-left), styled like the reference HUD.
