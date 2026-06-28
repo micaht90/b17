@@ -71,20 +71,41 @@ export function drawCockpit(ctx, state, vp) {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-  // windscreen frame
-  ctx.fillStyle = '#15191e';
-  ctx.fillRect(0, wsH - 6, W, 12);
-  ctx.fillStyle = 'rgba(21,25,30,0.95)';
-  ctx.fillRect(W / 2 - 5, 0, 10, wsH);
 
-  // Instrument panel.
-  ctx.fillStyle = '#1a2026';
-  ctx.fillRect(0, wsH, W, H - wsH);
+  // Green-tinted window framing (B-17 cockpit glazing) + center post.
+  ctx.fillStyle = '#3a4a3c';
+  ctx.fillRect(W / 2 - 7, 0, 14, wsH);
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * 0.16, 0); ctx.lineTo(0, wsH); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W * 0.84, 0); ctx.lineTo(W, wsH); ctx.closePath(); ctx.fill();
+  ctx.restore();
 
+  // Glareshield hood over the panel.
+  const glare = ctx.createLinearGradient(0, wsH - 10, 0, wsH + H * 0.05);
+  glare.addColorStop(0, '#272f27');
+  glare.addColorStop(1, '#11161a');
+  ctx.fillStyle = glare;
+  ctx.fillRect(0, wsH - 10, W, H * 0.06);
+
+  // Instrument panel with rivets.
+  ctx.fillStyle = '#191f24';
+  ctx.fillRect(0, wsH + H * 0.04, W, H - wsH);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let yy = wsH + H * 0.06; yy < H; yy += 34) {
+    for (let xx = 20; xx < W; xx += 46) {
+      ctx.beginPath(); ctx.arc(xx + (Math.floor(yy) % 2) * 23, yy, 1.3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Bezel behind the gauge cluster.
   const r = Math.min(W * 0.048, H * 0.1);
   const cy = wsH + (H - wsH) * 0.44;
   const gap = r * 2.3;
   const startX = W * 0.25;
+  ctx.fillStyle = '#10151a';
+  roundRect(ctx, startX - r * 1.5, cy - r * 1.5, gap * 3 + r * 3, r * 2.6, 12); ctx.fill();
+  ctx.strokeStyle = '#2b343c'; ctx.lineWidth = 2; ctx.stroke();
+
   dial(ctx, startX, cy, r, (state.throttle - CONTROL.throttleMin) / (CONTROL.throttleMax - CONTROL.throttleMin),
     'AIRSPEED', `${Math.round(state.throttle * 180)} mph`, COLORS.good);
   dial(ctx, startX + gap, cy, r, state.plane.altitude / state.mission.cruiseAltitude,

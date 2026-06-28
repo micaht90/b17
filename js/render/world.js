@@ -2,7 +2,7 @@
 // (high-altitude, per-seat framing) and the top-down bombsight.
 
 import { COLORS, GUN, GUNS } from '../config.js';
-import { activeArc, STATION_BY_ID, traverseRect } from '../stations.js';
+import { activeArc, STATION_BY_ID } from '../stations.js';
 import { projectFighter } from '../enemies.js';
 import { currentSpread } from '../combat.js';
 import { drawShape, SHAPE_NAMES } from '../targets.js';
@@ -244,6 +244,81 @@ function drawSeatFrame(ctx, state, vp, arc) {
     ctx.beginPath(); ctx.moveTo(W / 2, H * 0.08); ctx.lineTo(W / 2, H * 0.82); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(W * 0.06, H * 0.45); ctx.lineTo(W * 0.94, H * 0.45); ctx.stroke();
   }
+
+  // Gun-mount cradle rising from the bottom (the gun pivots out of it).
+  ctx.fillStyle = '#10141a';
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - W * 0.17, H);
+  ctx.lineTo(W / 2 - W * 0.07, H * 0.88);
+  ctx.lineTo(W / 2 + W * 0.07, H * 0.88);
+  ctx.lineTo(W / 2 + W * 0.17, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#1b222a';
+  ctx.beginPath();
+  ctx.ellipse(W / 2, H * 0.89, W * 0.08, H * 0.02, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// A Browning M2 .50 cal: receiver + perforated cooling jacket, pointing from
+// (bx,by) toward angle `ang`. Drawn in the foreground like a real gun seat.
+function drawFiftyCal(ctx, bx, by, ang, len, firing) {
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.rotate(ang + Math.PI / 2); // gun "up" axis points at the target
+
+  // Receiver block at the base.
+  ctx.fillStyle = '#15191e';
+  ctx.fillRect(-22, -len * 0.16, 44, len * 0.2);
+  ctx.fillStyle = '#23292f';
+  ctx.fillRect(-16, -len * 0.12, 32, len * 0.12);
+  // Spade grips hint.
+  ctx.fillStyle = '#10141a';
+  ctx.fillRect(-26, -len * 0.02, 10, len * 0.12);
+  ctx.fillRect(16, -len * 0.02, 10, len * 0.12);
+
+  // Perforated cooling jacket (barrel).
+  const bw = 15;
+  ctx.fillStyle = '#1b2026';
+  ctx.fillRect(-bw / 2, -len, bw, len * 0.84);
+  ctx.fillStyle = '#0c0f13';
+  for (let y = -len * 0.92; y < -len * 0.06; y += len * 0.075) {
+    ctx.beginPath(); ctx.arc(0, y, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  // Muzzle / flash hider.
+  ctx.fillStyle = '#2a3138';
+  ctx.fillRect(-bw / 2 - 2, -len - 8, bw + 4, 12);
+  if (firing) {
+    ctx.fillStyle = 'rgba(255,210,120,0.9)';
+    ctx.beginPath(); ctx.arc(0, -len - 8, 9 + Math.random() * 6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Classic ring-and-bead ("cartwheel") gunsight at the aim point.
+function drawRingSight(ctx, cx, cy, col, spread) {
+  // Faint spread ring (sustained-fire scatter).
+  ctx.strokeStyle = col === COLORS.crosshairJam ? 'rgba(154,163,173,0.4)' : 'rgba(255,90,77,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(spread, 16), 0, Math.PI * 2); ctx.stroke();
+
+  ctx.strokeStyle = col;
+  ctx.fillStyle = col;
+  ctx.lineWidth = 2.5;
+  // Outer ring.
+  ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2); ctx.stroke();
+  // Cardinal posts pointing inward.
+  ctx.lineWidth = 3;
+  for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * 30, cy + Math.sin(a) * 30);
+    ctx.lineTo(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14);
+    ctx.stroke();
+  }
+  // Center bead.
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.stroke();
 }
 
 function drawGunsAndReticle(ctx, state, vp) {
@@ -251,48 +326,19 @@ function drawGunsAndReticle(ctx, state, vp) {
   const st = state.stations[state.activeStation];
   const cx = state.crosshair.x, cy = state.crosshair.y;
   const twin = GUNS[state.activeStation] && GUNS[state.activeStation].type === 'twin';
+  const firing = state.muzzleFlash > 0;
 
-  // Traverse bounds.
-  const tr = traverseRect(state.activeStation, vp);
-  ctx.strokeStyle = 'rgba(215,227,236,0.12)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([6, 8]);
-  ctx.strokeRect(tr.x, tr.y, tr.w, tr.h);
-  ctx.setLineDash([]);
-
-  // Gun barrel(s) from the mount toward the crosshair.
-  const bx = W / 2, by = H * 1.0;
+  // Foreground .50 cal(s) sweeping toward the aim point.
+  const bx = W / 2, by = H * 1.06;
   const ang = Math.atan2(cy - by, cx - bx);
-  const offsets = twin ? [-12, 12] : [0];
+  const len = H * 0.46;
+  const offsets = twin ? [-20, 20] : [0];
   for (const off of offsets) {
-    ctx.save();
-    ctx.translate(bx + off * Math.cos(ang + Math.PI / 2), by + off * Math.sin(ang + Math.PI / 2));
-    ctx.rotate(ang + Math.PI / 2);
-    ctx.fillStyle = '#13171c';
-    ctx.fillRect(-7, -H * 0.2, 14, H * 0.22);
-    ctx.fillStyle = '#2a3138';
-    ctx.fillRect(-4, -H * 0.22, 8, H * 0.05);
-    ctx.restore();
+    drawFiftyCal(ctx, bx + off * Math.cos(ang + Math.PI / 2), by + off * Math.sin(ang + Math.PI / 2), ang, len, firing);
   }
 
-  // Spread reticle.
   const jam = st.jammed || st.disabled;
-  const col = jam ? COLORS.crosshairJam : COLORS.crosshair;
-  const spread = currentSpread(state);
-  ctx.strokeStyle = jam ? 'rgba(154,163,173,0.5)' : 'rgba(255,90,77,0.45)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(cx, cy, spread, 0, Math.PI * 2); ctx.stroke();
-
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - 24, cy); ctx.lineTo(cx - 9, cy);
-  ctx.moveTo(cx + 9, cy); ctx.lineTo(cx + 24, cy);
-  ctx.moveTo(cx, cy - 24); ctx.lineTo(cx, cy - 9);
-  ctx.moveTo(cx, cy + 9); ctx.lineTo(cx, cy + 24);
-  ctx.stroke();
-  ctx.fillStyle = col;
-  ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+  drawRingSight(ctx, cx, cy, jam ? COLORS.crosshairJam : COLORS.crosshair, currentSpread(state));
 }
 
 function drawStationLabel(ctx, state, vp, arc) {

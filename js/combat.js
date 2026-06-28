@@ -46,8 +46,9 @@ export function updateFiring(state, vp, dt, firing) {
     if (st.jammed && st.heat <= GUN.heatResumeAt) st.jammed = false;
   }
 
-  // Settle the recoil bloom.
+  // Settle the recoil bloom and muzzle flash.
   state.gunBloom = Math.max(0, state.gunBloom - GUN.bloomDecayPerSec * dt);
+  state.muzzleFlash = Math.max(0, state.muzzleFlash - dt);
 
   // Decay tracers.
   for (let i = state.tracers.length - 1; i >= 0; i--) {
@@ -88,6 +89,7 @@ function fireOneShot(state, vp) {
   const sy = state.crosshair.y + Math.sin(ang) * rad;
 
   state.tracers.push({ x1: vp.w / 2, y1: vp.h * 0.95, x2: sx, y2: sy, life: 0.07 });
+  state.muzzleFlash = 0.05;
 
   let best = null;
   let bestDist = Infinity;
