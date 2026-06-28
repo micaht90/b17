@@ -7,53 +7,51 @@ export const MISSIONS = [
     name: 'Schweinfurt Raid',
     briefing:
       'Target: the ball-bearing works at Schweinfurt. Without bearings the ' +
-      'enemy war machine grinds to a halt. Expect heavy fighter resistance ' +
-      'and a wall of flak over the target. Study the factory below — you must ' +
-      'pick it out from the bombsight yourself.',
+      'enemy war machine grinds to a halt. Fighters attack in passes — track ' +
+      'them in, fire short bursts so your guns don\'t overheat, and drive them ' +
+      'off before they bore in. Then study the factory: you must pick it out ' +
+      'from the bombsight yourself.',
     target: {
       name: 'Ball-Bearing Factory',
       description: 'Long assembly hall, sawtooth roof, two chimneys.',
       shape: 'factory',
     },
 
-    distance: 100,            // plane.position runs 0 -> distance
+    distance: 100,
     startFuel: 100,
-    startAmmoPerStation: 80,
+    startAmmoPerStation: 90,
     cruiseAltitude: 25000,
     minAltitudeToProceed: 18000,
 
-    // Fighter waves keyed to route progress (`at`). Each spawns `count`
-    // fighters in one arc, `interval` seconds apart.
+    // Fewer fighters, well spaced — passes you can actually track and answer.
     waves: [
-      { at: 12, arc: 'FRONT', count: 2, interval: 1.6 },
-      { at: 26, arc: 'HIGH',  count: 2, interval: 1.4 },
-      { at: 30, arc: 'REAR',  count: 2, interval: 1.6 },
-      { at: 46, arc: 'LEFT',  count: 2, interval: 1.5 },
-      { at: 50, arc: 'RIGHT', count: 2, interval: 1.5 },
-      { at: 72, arc: 'LOW',   count: 2, interval: 1.5 },
-      { at: 78, arc: 'FRONT', count: 2, interval: 1.3 },
-      { at: 84, arc: 'HIGH',  count: 2, interval: 1.3 },
+      { at: 8,  arc: 'FRONT', count: 1, interval: 2.5 },
+      { at: 18, arc: 'HIGH',  count: 2, interval: 3.0 },
+      { at: 30, arc: 'REAR',  count: 1, interval: 2.5 },
+      { at: 42, arc: 'LEFT',  count: 1, interval: 2.5 },
+      { at: 50, arc: 'RIGHT', count: 1, interval: 2.5 },
+      { at: 70, arc: 'LOW',   count: 2, interval: 3.0 },
+      { at: 82, arc: 'FRONT', count: 1, interval: 2.5 },
+      { at: 90, arc: 'HIGH',  count: 1, interval: 2.5 },
     ],
 
-    // Flak is ambient pressure near the target.
     flakZones: [{ from: 66, to: 96, intensity: 0.7 }],
 
-    // Force the dump-fuel / jettison-ammo decision mid-route.
     decisionTrigger: { at: 58 },
 
-    // Bomb run: the real target plus decoys scrolling past the bombsight.
     bombRun: {
       decoyShapes: ['rail_yard', 'refinery', 'airfield', 'bridge'],
       buildingCount: 5,
-      dropWindowRadius: 46, // px from bombsight center counted as a hit
+      dropWindowRadius: 46,
+      scrollSpeed: 140,
     },
 
     scoring: {
       bombHit: 1000,
-      accuracyBonus: 800,    // scaled by how centered the drop was
+      accuracyBonus: 800,
       fighterKill: 120,
-      survivalBonus: 600,    // scaled by remaining health
-      fuelBonus: 4,          // per % fuel remaining
+      survivalBonus: 600,
+      fuelBonus: 4,
     },
 
     next: null,

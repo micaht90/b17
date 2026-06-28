@@ -6,7 +6,7 @@ import { GAME } from './config.js';
 import { updateEnemies } from './enemies.js';
 import { updateFlak } from './flak.js';
 import { updateCrosshair, updateFiring } from './combat.js';
-import { updateResources, dumpFuel, jettisonAmmo, pressOn } from './resources.js';
+import { updateResources, speedFactor, dumpFuel, jettisonAmmo, pressOn } from './resources.js';
 import { initBombRun, updateBombRun, dropBomb } from './bombing.js';
 import { computeScore, saveBest } from './scoring.js';
 
@@ -18,7 +18,6 @@ function enterCruise(state) {
 
 function enterDecision(state) {
   state.decision.triggered = true;
-  // Plane is sagging below the safe altitude — that's why a choice is forced.
   state.plane.altitude = state.mission.minAltitudeToProceed - 1500;
   state.phase = PHASE.DECISION;
   state.phaseTime = 0;
@@ -30,6 +29,7 @@ function enterBombRun(state, vp) {
   state.fighters.length = 0;
   state.flak.length = 0;
   state.tracers.length = 0;
+  state.enemyTracers.length = 0;
   initBombRun(state, vp);
 }
 
@@ -40,8 +40,16 @@ function enterResults(state) {
   state.phaseTime = 0;
 }
 
+function decayEffects(state, dt) {
+  state.shake = Math.max(0, state.shake - dt * 2.2);
+  state.hitFlash = Math.max(0, state.hitFlash - dt * 1.8);
+  if (state.lastHit) {
+    state.lastHit.t -= dt;
+    if (state.lastHit.t <= 0) state.lastHit = null;
+  }
+}
+
 function updateCruise(state, vp, dt, frame) {
-  // Station switching (tap a station hotspot or press its number key).
   if (frame.tappedButton && frame.tappedButton.startsWith('station:')) {
     state.activeStation = frame.tappedButton.slice('station:'.length);
   }
@@ -49,18 +57,17 @@ function updateCruise(state, vp, dt, frame) {
 
   updateCrosshair(state, vp, dt);
   updateFiring(state, vp, dt, frame.firing);
+  decayEffects(state, dt);
 
-  // Advance along the route.
   state.plane.position = Math.min(
     state.mission.distance,
-    state.plane.position + GAME.cruiseSpeed * dt,
+    state.plane.position + GAME.cruiseSpeed * speedFactor(state) * dt,
   );
 
   updateResources(state, dt);
   updateEnemies(state, dt);
   updateFlak(state, dt);
 
-  // Out of fuel is as fatal as a destroyed hull.
   if (state.plane.fuel <= 0) state.plane.health = 0;
 
   if (state.plane.health <= 0) {
@@ -68,13 +75,11 @@ function updateCruise(state, vp, dt, frame) {
     return;
   }
 
-  // Force the resource decision once, before the flak belt.
   if (!state.decision.triggered && state.plane.position >= state.mission.decisionTrigger.at) {
     enterDecision(state);
     return;
   }
 
-  // Reached the target — begin the bomb run.
   if (state.plane.position >= state.mission.distance) {
     enterBombRun(state, vp);
   }
@@ -90,8 +95,7 @@ function updateDecision(state, frame) {
 
 function updateBomb(state, vp, dt, frame) {
   if (frame.tappedButton === 'drop') dropBomb(state, vp);
-  const finished = updateBombRun(state, vp, dt);
-  if (finished) enterResults(state);
+  if (updateBombRun(state, vp, dt)) enterResults(state);
 }
 
 export function update(state, vp, dt, frame) {
@@ -110,9 +114,7 @@ export function update(state, vp, dt, frame) {
       updateBomb(state, vp, dt, frame);
       break;
     case PHASE.RESULTS:
-      if (frame.tappedButton === 'again') {
-        resetMission(state);
-      }
+      if (frame.tappedButton === 'again') resetMission(state);
       break;
   }
 }

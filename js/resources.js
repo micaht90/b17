@@ -1,9 +1,9 @@
-// Fuel / weight model and the three resource-decision levers.
+// Fuel / weight model (now affected by engine damage and fuel leaks) and the
+// three resource-decision levers.
 
-import { GAME } from './config.js';
-import { totalAmmo } from './state.js';
+import { GAME, DAMAGE } from './config.js';
+import { totalAmmo, enginesOut } from './state.js';
 
-// Weight factor (~0.6 light .. ~1.1 heavy) drives fuel burn. Pure function.
 export function computeWeight(state) {
   const m = state.mission;
   const maxAmmo = m.startAmmoPerStation * 6;
@@ -13,18 +13,23 @@ export function computeWeight(state) {
   return 0.55 + fuelTerm + ammoTerm + bombTerm;
 }
 
-// Burn fuel while cruising; heavier plane burns faster.
+// Speed multiplier from engine losses (used by the cruise advance).
+export function speedFactor(state) {
+  return Math.max(0.5, 1 - 0.12 * enginesOut(state));
+}
+
 export function updateResources(state, dt) {
   state.weightFactor = computeWeight(state);
-  state.plane.fuel = Math.max(0, state.plane.fuel - GAME.fuelBurnPerSec * state.weightFactor * dt);
+  const out = enginesOut(state);
+  const burn =
+    GAME.fuelBurnPerSec * state.weightFactor * (1 + DAMAGE.engineFuelPenaltyEach * out) +
+    state.systems.fuelLeak;
+  state.plane.fuel = Math.max(0, state.plane.fuel - burn * dt);
 }
 
 // --- Decision levers ---------------------------------------------------------
-// All three resolve the DECISION phase; each has a distinct, visible tradeoff.
 
 export function dumpFuel(state) {
-  // Lighter, climb back to cruise — but a thin reserve (matters for campaign /
-  // the fuel score bonus).
   state.plane.fuel = Math.min(state.plane.fuel, 35);
   state.plane.altitude = state.mission.cruiseAltitude;
   state.lowAltitude = false;
@@ -33,7 +38,6 @@ export function dumpFuel(state) {
 }
 
 export function jettisonAmmo(state) {
-  // Climb back to cruise — but you fight the rest of the route nearly dry.
   for (const id in state.stations) {
     state.stations[id].ammo = Math.min(state.stations[id].ammo, 10);
   }
@@ -44,7 +48,6 @@ export function jettisonAmmo(state) {
 }
 
 export function pressOn(state) {
-  // Keep everything — but you cross the flak zone low, taking double damage.
   state.lowAltitude = true;
   state.decision.choice = 'press';
   state.decision.resolved = true;
