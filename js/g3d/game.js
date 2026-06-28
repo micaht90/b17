@@ -22,7 +22,7 @@ createTerrain(eng.scene);
 
 // Station base orientations + aim cones.
 const STATIONS = {
-  pilot: { yaw: 0, pitch: -0.12, pilot: true },
+  pilot: { yaw: 0, pitch: -0.05, pilot: true, cone: 0.5 },
   nose: { yaw: 0, pitch: -0.05, cone: 0.7, label: '12 o\'clock' },
   top: { yaw: 0, pitch: 0.4, cone: 0.8, label: 'high' },
   ball: { yaw: 0, pitch: -0.75, cone: 0.7, label: 'low' },
@@ -99,11 +99,12 @@ overlay.addEventListener('pointerdown', (e) => {
 overlay.addEventListener('pointermove', (e) => {
   if (!dragging || e.pointerId !== pid) return;
   const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
-  if (state.mode === 'pilot') {
-    if (onThrottle) state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
+  if (state.mode === 'pilot' && onThrottle) {
+    state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
   } else {
+    // Look around (gun aim, or panning the view out the cockpit windscreen).
     camera.rotation.y = clamp(camera.rotation.y - dx * SENS, state.base.yaw - state.base.cone, state.base.yaw + state.base.cone);
-    camera.rotation.x = clamp(camera.rotation.x - dy * SENS, Math.max(-0.95, state.base.pitch - state.base.cone), Math.min(0.5, state.base.pitch + state.base.cone));
+    camera.rotation.x = clamp(camera.rotation.x - dy * SENS, Math.max(-0.95, state.base.pitch - state.base.cone), Math.min(0.55, state.base.pitch + state.base.cone));
   }
 });
 overlay.addEventListener('pointerup', (e) => {
