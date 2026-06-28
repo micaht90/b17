@@ -2,6 +2,7 @@
 
 import { STATIONS } from './stations.js';
 import { getMission } from './data/missions.js';
+import { DAMAGE } from './config.js';
 
 export const PHASE = {
   BRIEFING: 'briefing',
@@ -19,36 +20,44 @@ export function createGameState(missionIndex = 0) {
     phaseTime: 0,
 
     plane: { health: 100, altitude: 25000, fuel: 100, position: 0, bombsAboard: true },
+
+    // Airframe systems (damage model).
+    systems: { engines: [true, true, true, true], fuelLeak: 0 },
+
+    // Per-station: ammo + gun condition.
     stations: {},
     activeStation: 'nose',
     weightFactor: 1,
 
     fighters: [],
     flak: [],
-    tracers: [],   // transient visual gunfire lines
+    tracers: [],        // player gunfire lines (transient)
+    enemyTracers: [],   // incoming gunfire lines (transient)
     kills: 0,
 
+    // Active-gun firing state.
     fireCooldown: 0,
+    gunBloom: 0,        // transient spread bloom (px) from recoil/sustained fire
+
+    // Feedback effects.
+    shake: 0,
+    hitFlash: 0,
 
     decision: { triggered: false, resolved: false, choice: null },
-    lowAltitude: false,    // pressed on through flak at low altitude
+    lowAltitude: false,
 
-    bomb: null,            // built when entering the bomb run
-
+    bomb: null,
     result: { won: false, score: 0, breakdown: null },
 
-    // Smoothed crosshair (set in world/CSS px) and the raw aim target.
     crosshair: { x: 0, y: 0 },
     aim: { x: 0, y: 0, has: false },
 
-    // Populated each frame by ui.layoutButtons; consumed by input + render.
     ui: { buttons: [], tappedButton: null, fireRect: null },
   };
   resetMission(state, missionIndex);
   return state;
 }
 
-// Reset plane/stations/entities for a fresh attempt at the given mission.
 export function resetMission(state, missionIndex = state.missionIndex) {
   const mission = getMission(missionIndex);
   state.missionIndex = missionIndex;
@@ -62,15 +71,23 @@ export function resetMission(state, missionIndex = state.missionIndex) {
   state.plane.position = 0;
   state.plane.bombsAboard = true;
 
+  state.systems = { engines: Array(DAMAGE.engines).fill(true), fuelLeak: 0 };
+
   state.stations = {};
-  for (const s of STATIONS) state.stations[s.id] = { ammo: mission.startAmmoPerStation };
+  for (const s of STATIONS) {
+    state.stations[s.id] = { ammo: mission.startAmmoPerStation, heat: 0, jammed: false, disabled: false, wounded: false };
+  }
   state.activeStation = 'nose';
 
   state.fighters.length = 0;
   state.flak.length = 0;
   state.tracers.length = 0;
+  state.enemyTracers.length = 0;
   state.kills = 0;
   state.fireCooldown = 0;
+  state.gunBloom = 0;
+  state.shake = 0;
+  state.hitFlash = 0;
 
   state.decision = { triggered: false, resolved: false, choice: null };
   state.lowAltitude = false;
@@ -78,13 +95,18 @@ export function resetMission(state, missionIndex = state.missionIndex) {
   state.result = { won: false, score: 0, breakdown: null };
   state.weightFactor = 1;
 
-  // Per-mission spawn bookkeeping (which waves have fired, pending spawns).
   state._wavesFired = new Set();
   state._spawnQueue = [];
+  state._cruiseClock = 0;
+  state._flakTimer = 0;
 }
 
 export function totalAmmo(state) {
   let n = 0;
   for (const id in state.stations) n += state.stations[id].ammo;
   return n;
+}
+
+export function enginesOut(state) {
+  return state.systems.engines.filter((e) => !e).length;
 }
