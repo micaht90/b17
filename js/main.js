@@ -4,10 +4,12 @@ import { createViewport } from './viewport.js';
 import { createInput, spaceHeld } from './input.js';
 import { createGameState, PHASE } from './state.js';
 import { startLoop } from './loop.js';
-import { layoutButtons, hitButton } from './ui.js';
+import { layoutButtons } from './ui.js';
+import { AIM } from './config.js';
 import { update } from './phases.js';
 import { drawCruise, drawBombRun } from './render/world.js';
 import { drawHUD } from './render/hud.js';
+import { drawCockpit } from './render/cockpit.js';
 import { drawBriefing, drawDecision, drawResults, drawButtons, drawRotatePrompt } from './render/screens.js';
 
 const canvas = document.getElementById('game');
@@ -18,40 +20,54 @@ const state = createGameState(0);
 // Debug handle (harmless): lets tooling/tests inspect live state.
 window.b17 = { state, vp };
 
-function inRect(r, p) {
-  return r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-}
+// Let input classify a touch against the current button layout at touch-down.
+input.setButtons(() => state.ui.buttons);
 
 // Turn raw pointer/key input into a per-frame intent for the phase machine.
+// Pointer ROLES are fixed at touch-down (see input.js): a finger on the Fire
+// button never moves the aim, and touch aiming is RELATIVE so the finger
+// doesn't have to cover the target.
 function resolveInput() {
-  // Discrete taps -> button presses (ignore the hold-to-fire button here).
   let tappedButton = null;
-  let tap;
-  while ((tap = input.tapQueue.shift())) {
-    const b = hitButton(state.ui.buttons, tap.x, tap.y);
-    if (b && !b.fire) tappedButton = b.id;
-  }
+  let id;
+  while ((id = input.tapQueue.shift())) tappedButton = id;
 
   const keyStations = input.keyStationQueue.splice(0);
 
-  // Firing: space, a finger held on the Fire button, or mouse held in the view.
   let firing = spaceHeld(input);
+  let touchAim = null, mouseAim = null;
   for (const p of input.pointers.values()) {
-    if (!p.down) continue;
-    if (inRect(state.ui.fireRect, p)) firing = true;
-    else if (p.type === 'mouse' && !hitButton(state.ui.buttons, p.x, p.y)) firing = true;
-  }
-
-  // Aim: latest pointer over open world (not on any control).
-  for (const p of input.pointers.values()) {
-    const onControl = hitButton(state.ui.buttons, p.x, p.y);
-    if (onControl) continue;
-    if (p.down || p.type === 'mouse') {
-      state.aim.x = p.x;
-      state.aim.y = p.y;
-      state.aim.has = true;
+    if (p.role === 'fire' && p.down) firing = true;
+    if (p.role === 'aim') {
+      if (p.type === 'mouse') { mouseAim = p; if (p.down) firing = true; }
+      else if (p.down) touchAim = p;
     }
   }
+  // An active touch always wins over a hovering mouse.
+  const aimPtr = touchAim || mouseAim;
+
+  if (aimPtr) {
+    if (!aimPtr.seeded) {
+      // Continue from where the crosshair already is — no jump to the finger.
+      aimPtr.seeded = true;
+      aimPtr.px = aimPtr.x; aimPtr.py = aimPtr.y;
+      state.aim.x = state.crosshair.x;
+      state.aim.y = state.crosshair.y;
+    }
+    if (aimPtr.type === 'mouse') {
+      state.aim.x = aimPtr.x;
+      state.aim.y = aimPtr.y;
+    } else {
+      state.aim.x += (aimPtr.x - aimPtr.px) * AIM.touchSensitivity;
+      state.aim.y += (aimPtr.y - aimPtr.py) * AIM.touchSensitivity;
+    }
+    state.aim.has = true;
+    state.aim.x = Math.max(0, Math.min(vp.w, state.aim.x));
+    state.aim.y = Math.max(0, Math.min(vp.h, state.aim.y));
+  }
+
+  // Record this frame's positions for next-frame relative deltas.
+  for (const p of input.pointers.values()) { p.px = p.x; p.py = p.y; }
 
   return { tappedButton, keyStations, firing };
 }
@@ -65,12 +81,12 @@ function render() {
       drawBriefing(ctx, state, vp);
       break;
     case PHASE.CRUISE:
-      drawCruise(ctx, state, vp);
-      drawHUD(ctx, state, vp);
+      if (state.activeStation === 'pilot') drawCockpit(ctx, state, vp);
+      else { drawCruise(ctx, state, vp); drawHUD(ctx, state, vp); }
       break;
     case PHASE.DECISION:
-      drawCruise(ctx, state, vp);
-      drawHUD(ctx, state, vp);
+      if (state.activeStation === 'pilot') drawCockpit(ctx, state, vp);
+      else { drawCruise(ctx, state, vp); drawHUD(ctx, state, vp); }
       drawDecision(ctx, state, vp);
       break;
     case PHASE.BOMBRUN:

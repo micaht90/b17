@@ -1,8 +1,9 @@
 // Flak: ambient anti-aircraft fire in the target zone. Not dodgeable by
 // station-switching — it pressures the player to get through fast / high.
 
-import { GAME } from './config.js';
+import { GAME, CONTROL } from './config.js';
 import { applyHit } from './damage.js';
+import { pushRadio } from './radio.js';
 
 export function inFlakZone(state) {
   for (const z of state.mission.flakZones) {
@@ -15,6 +16,10 @@ export function updateFlak(state, dt) {
   const zone = inFlakZone(state);
 
   if (zone) {
+    if (!state.warned.flak) {
+      state.warned.flak = true;
+      pushRadio(state, 'Flak ahead — bombardier, stand by!', 'warn');
+    }
     state._flakTimer = (state._flakTimer || 0) - dt;
     if (state._flakTimer <= 0) {
       state._flakTimer = (0.6 + Math.random() * 0.9) / zone.intensity;
@@ -34,7 +39,8 @@ export function updateFlak(state, dt) {
     b.age += dt;
     if (!b.exploded && b.age >= b.fuse) {
       b.exploded = true;
-      const chance = b.intensity * 0.4 * (state.lowAltitude ? GAME.flakLowAltMultiplier : 1);
+      let chance = b.intensity * 0.4 * (state.lowAltitude ? GAME.flakLowAltMultiplier : 1);
+      if (state.evade.active > 0) chance *= CONTROL.evadeFlakMult;
       if (Math.random() < chance) {
         applyHit(state, 'flak');
         b.hit = true;

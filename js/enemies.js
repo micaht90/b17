@@ -5,8 +5,10 @@
 import { GUN, FIGHTER } from './config.js';
 import { activeArc } from './stations.js';
 import { applyHit } from './damage.js';
+import { radioBandit, radioIncoming, radioKill } from './radio.js';
 
 function spawnFighter(state, arc) {
+  radioBandit(state, arc);
   state.fighters.push({
     arc,
     t: 0,
@@ -67,6 +69,7 @@ export function updateEnemies(state, dt) {
         f.state = 'pass';
         f.warn = FIGHTER.warnTime;
         f.fireTimer = 0;
+        radioIncoming(state, f.arc);
       }
     } else if (f.state === 'pass') {
       // Hold roughly in close while making the firing pass.
@@ -121,6 +124,7 @@ export function killFighter(state, f) {
   f.dying = 0.5;
   f.hp = 0;
   state.kills += 1;
+  radioKill(state);
 }
 
 // Arcs with a live fighter that is close or attacking — drives the HUD flash.

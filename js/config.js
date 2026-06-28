@@ -49,21 +49,20 @@ export const GAME = {
 // Weighty-but-direct gunnery: heavy aim, spread that blooms with heat/recoil,
 // overheating with jams. Bullets hit where pointed (no leading required).
 export const GUN = {
-  aimLerp: 0.14,              // lower = heavier, slower-settling aim
-  fireRate: 6.5,             // rounds/sec while held
-  spreadBaseDeg: 1.4,        // inherent cone at rest (degrees, mapped to px by range)
-  spreadPx: 14,              // base spread radius in px
-  bloomPerShot: 7,           // px added to transient bloom per shot
-  bloomMax: 80,              // cap on transient bloom
-  bloomDecayPerSec: 90,      // px/sec the bloom settles when not firing
-  spreadPerHeat: 34,         // extra px spread at full heat
-  recoilKick: 9,             // px upward jump per shot (settles via bloom/aim)
-  heatPerShot: 0.022,        // ~45 sustained rounds to overheat
-  heatCoolPerSec: 0.32,      // cooling when not firing
+  aimLerp: 0.16,              // lower = heavier, slower-settling aim
+  fireRate: 6,               // rounds/sec while held (single mount)
+  spreadPx: 9,               // base spread radius in px — short bursts are tight
+  bloomPerShot: 5,           // px added to transient bloom per shot
+  bloomMax: 50,              // cap on transient bloom
+  bloomDecayPerSec: 95,      // px/sec the bloom settles when not firing
+  spreadPerHeat: 22,         // extra px spread at full heat
+  recoilKick: 2.5,           // subtle muzzle climb per shot (spread bloom is the real penalty)
+  heatPerShot: 0.02,         // ~50 sustained rounds to overheat
+  heatCoolPerSec: 0.34,      // cooling when not firing
   heatJamAt: 1.0,            // overheats -> jam
   heatResumeAt: 0.55,        // must cool to here before firing again
   fighterHp: 3,              // bullet hits to down a fighter
-  hitRadiusScale: 0.5,       // fighter hit radius = size * this
+  hitRadiusScale: 0.62,      // fighter hit radius = size * this
 };
 
 // Fighter attack-run behaviour.
@@ -92,8 +91,50 @@ export const DAMAGE = {
   gunnerSpreadPenalty: 1.6,    // wounded gunner -> wider spread
 };
 
+// Cockpit / pilot controls.
+export const CONTROL = {
+  throttleMin: 0.7,          // economy: slower, sips fuel
+  throttleMax: 1.4,          // full power: faster through flak, drinks fuel
+  throttleStep: 0.15,
+  evadeDuration: 4.0,        // seconds a corkscrew lasts
+  evadeCooldown: 6.0,
+  evadeFlakMult: 0.3,        // flak hit chance while evading
+  evadeAimPenalty: 2.2,      // gunner spread multiplier while evading
+  braceDuration: 1.6,        // seconds a brace protects
+  braceFlakMult: 0.4,        // flak damage taken while braced
+};
+
+// Engine fires from battle damage.
+export const FIRE = {
+  igniteChance: 0.5,         // chance an engine hit also starts a fire
+  dpsHealth: 2.6,            // hull %/sec lost per burning engine
+  spreadPerSec: 0.06,       // chance/sec a fire knocks out another engine
+};
+
+// Crew radio chatter.
+export const RADIO = {
+  msgLife: 5.5,
+  maxLines: 4,
+};
+
+// Touch aiming: relative (trackpad-style) so your finger never covers the target.
+export const AIM = {
+  touchSensitivity: 1.35,
+};
+
+// Gun fitments per station (B-17G): turrets are twin .50 cals, the rest single.
+export const GUNS = {
+  nose:  { type: 'single', name: 'Cheek .50' },
+  top:   { type: 'twin',   name: 'Top Turret 2x.50' },
+  ball:  { type: 'twin',   name: 'Ball Turret 2x.50' },
+  tail:  { type: 'twin',   name: 'Tail 2x.50' },
+  waistL:{ type: 'single', name: 'Left Waist .50' },
+  waistR:{ type: 'single', name: 'Right Waist .50' },
+};
+export const TWIN_RATE_MULT = 1.7;  // twin mounts put out more lead
+
 // Default key bindings (desktop fallback). Index keys switch stations.
 export const KEYS = {
   fire: [' ', 'Spacebar'],
-  stations: { '1': 'nose', '2': 'top', '3': 'ball', '4': 'tail', '5': 'waistL', '6': 'waistR' },
+  stations: { '1': 'nose', '2': 'top', '3': 'ball', '4': 'tail', '5': 'waistL', '6': 'waistR', '0': 'pilot' },
 };

@@ -9,6 +9,27 @@ import { updateCrosshair, updateFiring } from './combat.js';
 import { updateResources, speedFactor, dumpFuel, jettisonAmmo, pressOn } from './resources.js';
 import { initBombRun, updateBombRun, dropBomb } from './bombing.js';
 import { computeScore, saveBest } from './scoring.js';
+import { updateControls, throttleUp, throttleDown, extinguish, sealLeak, evade, brace } from './controls.js';
+import { updateRadio, pushRadio } from './radio.js';
+
+function handleControls(state, btn) {
+  switch (btn) {
+    case 'throttle_up': throttleUp(state); break;
+    case 'throttle_down': throttleDown(state); break;
+    case 'extinguish': extinguish(state); break;
+    case 'seal': sealLeak(state); break;
+    case 'evade': evade(state); break;
+    case 'brace': brace(state); break;
+  }
+}
+
+function checkWarnings(state) {
+  if (!state.warned.fuel && state.plane.fuel < 25) { state.warned.fuel = true; pushRadio(state, 'Fuel\'s getting low, skipper!', 'warn'); }
+  if (!state.warned.hull && state.plane.health < 30) { state.warned.hull = true; pushRadio(state, 'She\'s shot to pieces — hold together!', 'alert'); }
+  if (!state.warned.target && state.plane.position > state.mission.distance - 12) {
+    state.warned.target = true; pushRadio(state, 'Approaching target — open bomb bay doors!', 'warn');
+  }
+}
 
 function enterCruise(state) {
   state.phase = PHASE.CRUISE;
@@ -31,6 +52,7 @@ function enterBombRun(state, vp) {
   state.tracers.length = 0;
   state.enemyTracers.length = 0;
   initBombRun(state, vp);
+  pushRadio(state, 'On the bomb run — steady... steady...', 'warn');
 }
 
 function enterResults(state) {
@@ -54,9 +76,11 @@ function updateCruise(state, vp, dt, frame) {
     state.activeStation = frame.tappedButton.slice('station:'.length);
   }
   for (const id of frame.keyStations) state.activeStation = id;
+  handleControls(state, frame.tappedButton);
 
   updateCrosshair(state, vp, dt);
   updateFiring(state, vp, dt, frame.firing);
+  updateControls(state, dt);
   decayEffects(state, dt);
 
   state.plane.position = Math.min(
@@ -67,6 +91,7 @@ function updateCruise(state, vp, dt, frame) {
   updateResources(state, dt);
   updateEnemies(state, dt);
   updateFlak(state, dt);
+  checkWarnings(state);
 
   if (state.plane.fuel <= 0) state.plane.health = 0;
 
@@ -94,12 +119,16 @@ function updateDecision(state, frame) {
 }
 
 function updateBomb(state, vp, dt, frame) {
-  if (frame.tappedButton === 'drop') dropBomb(state, vp);
+  if (frame.tappedButton === 'drop' && state.bomb && !state.bomb.dropped) {
+    dropBomb(state, vp);
+    pushRadio(state, 'Bombs away!', 'info');
+  }
   if (updateBombRun(state, vp, dt)) enterResults(state);
 }
 
 export function update(state, vp, dt, frame) {
   state.phaseTime += dt;
+  updateRadio(state, dt);
   switch (state.phase) {
     case PHASE.BRIEFING:
       if (frame.tappedButton === 'takeoff') enterCruise(state);
