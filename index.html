@@ -5,12 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#1a2026" />
-  <title>B-17: Flying Fortress</title>
-  <link rel="stylesheet" href="./css/style.css" />
+  <meta name="theme-color" content="#0a0f14" />
+  <title>B-17 Flying Fortress</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; touch-action: none;
+      font-family: "Courier New", monospace; -webkit-user-select: none; user-select: none; color: #dfeaf2; }
+    #c, #o { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    #o { z-index: 2; }
+    #bar { position: fixed; z-index: 3; left: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 5px; max-width: 52vw; }
+    #bar button, #drop, .scrn-btn { font-family: inherit; font-weight: bold; color: #cdd9e3;
+      background: rgba(14,20,26,0.82); border: 1px solid #33424f; border-radius: 6px; }
+    #bar button { font-size: 12px; padding: 7px 9px; }
+    #bar button.active { background: #5fc77a; color: #08110a; border-color: #cfe; }
+    #tag { position: fixed; right: 12px; top: 10px; z-index: 3; color: #e6b84d; font-weight: bold; font-size: 12px; opacity: .85; }
+    #drop { position: fixed; z-index: 4; left: 50%; transform: translateX(-50%); bottom: 18px; display: none;
+      font-size: 18px; padding: 14px 30px; background: #5fc77a; color: #08110a; border-color: #cfe; }
+    #screen { position: fixed; inset: 0; z-index: 5; display: none; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center; background: rgba(7,11,15,0.9); padding: 20px; }
+    #screen h1 { color: #e6b84d; margin: 0 0 6px; font-size: clamp(20px, 5vw, 34px); }
+    #screen h2 { color: #5fc77a; margin: 4px 0; font-size: clamp(15px, 3.5vw, 22px); }
+    #screen p { color: #cdd9e3; max-width: 640px; line-height: 1.4; font-size: clamp(13px, 2.6vw, 16px); }
+    #screen .rows { margin: 8px 0; font-size: clamp(13px, 2.8vw, 17px); }
+    #screen .scrn-btn { margin-top: 14px; font-size: 18px; padding: 14px 34px; background: #5fc77a; color: #08110a; border-color: #cfe; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "./vendor/three.module.min.js" } }
+  </script>
 </head>
 <body>
-  <canvas id="game" aria-label="B-17 Flying Fortress game"></canvas>
-  <script type="module" src="./js/main.js"></script>
+  <canvas id="c"></canvas>
+  <canvas id="o"></canvas>
+  <div id="bar">
+    <button data-st="pilot">PILOT</button>
+    <button data-st="nose">NOSE</button>
+    <button data-st="top">TOP</button>
+    <button data-st="ball">BALL</button>
+    <button data-st="waistL">L.WST</button>
+    <button data-st="waistR">R.WST</button>
+    <button data-st="tail">TAIL</button>
+  </div>
+  <button id="drop">DROP BOMBS</button>
+  <div id="screen"></div>
+  <div id="tag">B-17 · 3D</div>
+  <script type="module" src="./js/g3d/game.js"></script>
 </body>
 </html>
