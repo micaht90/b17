@@ -99,10 +99,11 @@ overlay.addEventListener('pointerdown', (e) => {
 overlay.addEventListener('pointermove', (e) => {
   if (!dragging || e.pointerId !== pid) return;
   const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
-  if (state.mode === 'pilot' && onThrottle) {
-    state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
+  if (state.mode === 'pilot') {
+    // Cockpit is a fixed forward view; drag only works the throttle.
+    if (onThrottle) state.throttle = Math.max(0.7, Math.min(1.4, state.throttle - dy * 0.004));
   } else {
-    // Look around (gun aim, or panning the view out the cockpit windscreen).
+    // Gun stations: swing the gun to aim within the station's cone.
     camera.rotation.y = clamp(camera.rotation.y - dx * SENS, state.base.yaw - state.base.cone, state.base.yaw + state.base.cone);
     camera.rotation.x = clamp(camera.rotation.x - dy * SENS, Math.max(-0.95, state.base.pitch - state.base.cone), Math.min(0.55, state.base.pitch + state.base.cone));
   }
