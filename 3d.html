@@ -6,10 +6,10 @@
   <title>B-17 — 3D Cockpit Preview</title>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; touch-action: none; font-family: "Courier New", monospace; }
-    #c { display: block; width: 100vw; height: 100vh; }
-    #hud { position: fixed; left: 12px; top: 10px; color: #dfeaf2; text-shadow: 0 1px 2px #000; font-weight: bold; font-size: 14px; }
-    #hint { position: fixed; left: 0; right: 0; bottom: 14px; text-align: center; color: #cdd9e3; text-shadow: 0 1px 2px #000; font-size: 13px; }
-    #tag { position: fixed; right: 12px; top: 10px; color: #e6b84d; font-weight: bold; font-size: 13px; opacity: .85; }
+    #c, #o { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    #o { z-index: 2; }
+    #tag { position: fixed; right: 12px; top: 10px; z-index: 3; color: #e6b84d; font-weight: bold; font-size: 13px; opacity: .85; }
+    #hint { position: fixed; left: 0; right: 0; bottom: 12px; z-index: 3; text-align: center; color: #cdd9e3; text-shadow: 0 1px 2px #000; font-size: 13px; }
   </style>
   <script type="importmap">
   { "imports": { "three": "./vendor/three.module.min.js" } }
@@ -17,9 +17,10 @@
 </head>
 <body>
   <canvas id="c"></canvas>
-  <div id="hud">AIRSPEED: <span id="spd">180 mph</span></div>
-  <div id="tag">B-17 · 3D COCKPIT PREVIEW</div>
-  <div id="hint">Drag the red THROTTLE knob up/down to set power</div>
+  <canvas id="o"></canvas>
+  <div id="tag">B-17 · 3D COCKPIT</div>
+  <div id="hint">Drag the red THROTTLE handle up/down to set power</div>
+  <span id="spd" style="display:none"></span>
   <script type="module" src="./js/g3d/main3d.js"></script>
 </body>
 </html>
