@@ -84,13 +84,13 @@ function spawnFromArc(arc) {
   const d = new THREE.Vector3(...(ARC_DIR[arc] || [0, 0, -1])).normalize();
   const tan = new THREE.Vector3(-d.z, 0, d.x);
   // Start far out along the arc, with a lateral offset so the run curves in.
-  f.position.copy(d).multiplyScalar(720 + Math.random() * 220)
+  f.position.copy(d).multiplyScalar(560 + Math.random() * 200)
     .addScaledVector(tan, (Math.random() < 0.5 ? -1 : 1) * (140 + Math.random() * 120))
     .add(new THREE.Vector3(0, (Math.random() - 0.5) * 120, 0));
   f.userData.alive = true; f.visible = true;
   f.userData.arc = arc;
   f.userData.phase = 'approach';
-  f.userData.speed = 150 + Math.random() * 50;
+  f.userData.speed = 52 + Math.random() * 26;          // slow closing speed — trackable
   f.userData.vel = _v.copy(d).multiplyScalar(-f.userData.speed);
   f.userData.fired = false;
   f.userData.roll = 0;
