@@ -2,22 +2,39 @@
 
 import * as THREE from 'three';
 
+// Single-seat WWII fighter (FW-190 flavour). Nose points toward -Z so a
+// THREE lookAt() (which aims the object's -Z at the target) faces it forward.
 export function makeFighter() {
   const g = new THREE.Group();
-  const body = new THREE.MeshStandardMaterial({ color: 0x2b3037, metalness: 0.3, roughness: 0.6 });
-  const fus = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 4.2, 4, 10), body);
-  fus.rotation.x = Math.PI / 2;
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.22, 1.4), body);
-  const tailH = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.18, 0.8), body);
-  tailH.position.z = 2.4;
-  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.1, 0.8), body);
-  fin.position.set(0, 0.5, 2.4);
-  const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.9, 12), new THREE.MeshStandardMaterial({ color: 0x9a2a22 }));
-  spinner.rotation.x = -Math.PI / 2; spinner.position.z = -2.6;
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), new THREE.MeshStandardMaterial({ color: 0x6fd0e6, metalness: 0.1, roughness: 0.2 }));
-  canopy.position.set(0, 0.4, -0.5); canopy.scale.set(1, 0.7, 1.6);
-  g.add(fus, wing, tailH, fin, spinner, canopy);
+  const body = new THREE.MeshStandardMaterial({ color: 0x6b7158, metalness: 0.2, roughness: 0.7 });
+  const belly = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.2, roughness: 0.7 });
+
+  // Fuselage: a tapered body along Z (nose at -Z, tail at +Z).
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.34, 5.4, 16), body);
+  fus.rotation.x = Math.PI / 2; fus.position.z = 0.2;
+  // Engine cowl + spinner up front.
+  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.62, 0.7, 16), new THREE.MeshStandardMaterial({ color: 0x3a3f33, roughness: 0.6 }));
+  cowl.rotation.x = Math.PI / 2; cowl.position.z = -2.5;
+  const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.0, 16), new THREE.MeshStandardMaterial({ color: 0x9a2a22, roughness: 0.5 }));
+  spinner.rotation.x = -Math.PI / 2; spinner.position.z = -3.3;
+  const prop = new THREE.Mesh(new THREE.BoxGeometry(0.14, 4.2, 0.22), new THREE.MeshStandardMaterial({ color: 0x15171a }));
+  prop.position.z = -3.05;
+
+  // Wings: tapered, swept slightly, with dihedral.
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.18, 1.7), body);
+  wing.position.z = -0.3; wing.geometry.translate(0, 0, 0);
+  // Tail surfaces.
+  const tailH = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.16, 1.0), body); tailH.position.z = 2.5;
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.3, 1.2), body); fin.position.set(0, 0.6, 2.6);
+  // Canopy.
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), new THREE.MeshStandardMaterial({ color: 0x4a5560, metalness: 0.3, roughness: 0.25 }));
+  canopy.position.set(0, 0.45, -0.7); canopy.scale.set(0.9, 0.7, 1.7);
+  // Belly stripe to read top-from-bottom orientation.
+  const keel = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 4.5), belly); keel.position.set(0, -0.5, 0.2);
+
+  g.add(fus, cowl, spinner, prop, wing, tailH, fin, canopy, keel);
   g.userData.kind = 'fighter';
+  g.userData.prop = prop;
   return g;
 }
 

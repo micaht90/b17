@@ -47,7 +47,7 @@ const state = {
   score: 0, kills: 0, position: 0, altitude: 25000, speed: 232, heading: 0,
   time: '07:54', radio: [], hitFlash: 0,
   base: { yaw: 0, pitch: -0.04, yawCone: 0.34, pitchCone: 0.2 },
-  lookYaw: 0, lookPitch: 0, lookDX: 0, lookDY: 0, climb: 0,
+  lookYaw: 0, lookPitch: 0, lookDX: 0, lookDY: 0, climb: 0, fireFx: 0,
   bomb: null, result: null, won: false, bombEta: 0,
   _waves: new Set(), _flakT: 0, _warned: {},
 };
@@ -75,7 +75,7 @@ for (const p of [[-130, -35, -230], [165, 5, -380], [-320, 30, -640]]) {
   const b = makeBomber(); b.position.set(...p); b.rotation.y = Math.PI; b.scale.setScalar(1.5); eng.scene.add(b);
 }
 const fighters = [];
-for (let i = 0; i < 7; i++) { const f = makeFighter(); f.visible = false; f.userData.alive = false; f.scale.setScalar(2); eng.scene.add(f); fighters.push(f); }
+for (let i = 0; i < 7; i++) { const f = makeFighter(); f.visible = false; f.userData.alive = false; f.scale.setScalar(3.2); eng.scene.add(f); fighters.push(f); }
 function liveCount() { return fighters.filter((f) => f.userData.alive).length; }
 
 const _v = new THREE.Vector3();
@@ -83,19 +83,20 @@ function spawnFromArc(arc) {
   const f = fighters.find((x) => !x.userData.alive); if (!f) return;
   const d = new THREE.Vector3(...(ARC_DIR[arc] || [0, 0, -1])).normalize();
   const tan = new THREE.Vector3(-d.z, 0, d.x);
-  // Start far out along the arc, with a lateral offset so the run curves in.
-  f.position.copy(d).multiplyScalar(560 + Math.random() * 200)
-    .addScaledVector(tan, (Math.random() < 0.5 ? -1 : 1) * (140 + Math.random() * 120))
-    .add(new THREE.Vector3(0, (Math.random() - 0.5) * 120, 0));
+  // Start a moderate distance out along the arc, with a lateral offset so the
+  // run curves in close (not a far-away crawl, not a fast ram).
+  f.position.copy(d).multiplyScalar(330 + Math.random() * 130)
+    .addScaledVector(tan, (Math.random() < 0.5 ? -1 : 1) * (90 + Math.random() * 80))
+    .add(new THREE.Vector3(0, (Math.random() - 0.5) * 80, 0));
   f.userData.alive = true; f.visible = true;
   f.userData.arc = arc;
   f.userData.phase = 'approach';
-  f.userData.speed = 52 + Math.random() * 26;          // slow closing speed — trackable
+  f.userData.speed = 78 + Math.random() * 26;          // trackable closing speed
   f.userData.vel = _v.copy(d).multiplyScalar(-f.userData.speed);
   f.userData.fired = false;
   f.userData.roll = 0;
-  // Aim at a point just off the bomber so passes look like gun runs, not rams.
-  f.userData.aim = new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 40, (Math.random() - 0.5) * 60);
+  // Aim close past the bomber so it bores right in, fires, then breaks away.
+  f.userData.aim = new THREE.Vector3((Math.random() - 0.5) * 28, (Math.random() - 0.5) * 22, (Math.random() - 0.5) * 28);
   radioBandit(state, arc);
 }
 
@@ -277,6 +278,7 @@ overlay.addEventListener('pointerup', (e) => {
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
 function fire() {
+  state.fireFx = 0.11;                     // drives the 2D tracer/muzzle effect
   raycaster.setFromCamera({ x: 0, y: 0 }, camera);
   const hits = raycaster.intersectObjects(fighters, true);
   let hit = null;
@@ -403,6 +405,7 @@ function tick(now) {
   if (state.phase === 'cruise') updateCruise(dt);
   else if (state.phase === 'bombrun') updateBombRun(dt);
 
+  if (state.fireFx > 0) state.fireFx = Math.max(0, state.fireFx - dt);
   updateFighters(dt);
   for (let i = bursts.length - 1; i >= 0; i--) { const b = bursts[i]; b.userData.life -= dt; b.scale.multiplyScalar(1 + dt * 4); b.material.opacity = Math.max(0, b.userData.life / 0.5); if (b.userData.life <= 0) { eng.scene.remove(b); bursts.splice(i, 1); } }
 
@@ -429,14 +432,16 @@ function updateFighters(dt) {
       }
     } else { // breakaway
       _desired.copy(u.aim).sub(f.position).normalize().multiplyScalar(u.speed * 1.1);
-      if (dist > 760) { u.alive = false; f.visible = false; continue; }
+      if (dist > 600) { u.alive = false; f.visible = false; continue; }
     }
     // Steer velocity toward desired (limited turn rate) -> curved path.
     const turn = 1 - Math.exp(-dt * 2.2);
     u.vel.lerp(_desired, turn);
     f.position.addScaledVector(u.vel, dt);
-    // Orient + bank into the turn.
-    _tmp.copy(f.position).add(u.vel); f.lookAt(_tmp);
+    // Orient nose into the direction of travel. Object3D.lookAt aims +Z at the
+    // target, and the model's nose is -Z, so look at a point BEHIND the motion.
+    _tmp.copy(f.position).sub(u.vel); f.lookAt(_tmp);
+    if (u.prop) u.prop.rotation.z += dt * 40;            // spinning propeller
     const lateral = _tmp.copy(u.vel).normalize().cross(_desired.normalize()).y;
     u.roll += ((-lateral * 1.1) - u.roll) * Math.min(1, dt * 4);
     f.rotateZ(u.roll);
@@ -485,12 +490,37 @@ function drawOverlay() {
   if (state.phase === 'briefing' || state.phase === 'results') { octx.clearRect(0, 0, W, H); return; }
   if (state.phase === 'bombrun') { drawBombsight(); return; }
   if (state.mode === 'pilot') { if (cockpitReady) drawCockpit(octx, W, H, state); else octx.clearRect(0, 0, W, H); }
-  else drawGunFrame(octx, W, H, state);
+  else { drawGunFrame(octx, W, H, state); if (state.fireFx > 0) drawTracers(); }
 
   drawPlaneDiagram(octx, W, H, clock);
   drawStatus();
   drawRadio();
   if (state.hitFlash > 0) { const g = octx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.8); g.addColorStop(0, 'rgba(224,88,74,0)'); g.addColorStop(1, `rgba(224,88,74,${0.5 * state.hitFlash})`); octx.fillStyle = g; octx.fillRect(0, 0, W, H); }
+}
+
+// Bright tracer streaks from the two guns converging on the gunsight, plus a
+// muzzle glow — drawn in 2D so they're always clearly visible.
+function drawTracers() {
+  const a = Math.min(1, state.fireFx / 0.11);
+  const sx = W / 2, sy = H * 0.54;                     // gunsight (ring) centre
+  octx.save();
+  octx.lineCap = 'round';
+  for (const off of [-1, 1]) {
+    const bx = W / 2 + off * W * 0.05, by = H * 0.94;  // barrel mouth
+    const jx = (Math.random() - 0.5) * W * 0.01;
+    octx.strokeStyle = `rgba(255,241,168,${0.85 * a})`;
+    octx.lineWidth = Math.max(2, W * 0.004);
+    octx.beginPath(); octx.moveTo(bx, by); octx.lineTo(sx + jx, sy); octx.stroke();
+    // hot core
+    octx.strokeStyle = `rgba(255,255,255,${0.7 * a})`;
+    octx.lineWidth = Math.max(1, W * 0.0016);
+    octx.beginPath(); octx.moveTo(bx, by); octx.lineTo(sx + jx, sy); octx.stroke();
+    // muzzle glow
+    const g = octx.createRadialGradient(bx, by, 0, bx, by, W * 0.03);
+    g.addColorStop(0, `rgba(255,216,106,${0.8 * a})`); g.addColorStop(1, 'rgba(255,216,106,0)');
+    octx.fillStyle = g; octx.beginPath(); octx.arc(bx, by, W * 0.03, 0, Math.PI * 2); octx.fill();
+  }
+  octx.restore();
 }
 
 function drawBombsight() {
