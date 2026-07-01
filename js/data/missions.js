@@ -8,7 +8,7 @@ export const MISSIONS = [
     briefing:
       'Target: the ball-bearing works at Schweinfurt. Without bearings the ' +
       'enemy war machine grinds to a halt. Fighters attack in passes — track ' +
-      'them in, fire short bursts so your guns don\'t overheat, and drive them ' +
+      'them in, keep the tracers on target, and drive them ' +
       'off before they bore in. Then study the factory: you must pick it out ' +
       'from the bombsight yourself.',
     target: {

@@ -33,7 +33,7 @@ export function createGameState(missionIndex = 0) {
     radio: [],
     warned: { fuel: false, hull: false, flak: false, target: false },
 
-    // Per-station: ammo + gun condition.
+    // Per-station: ammo + battle damage.
     stations: {},
     activeStation: 'nose',
     weightFactor: 1,
@@ -90,7 +90,7 @@ export function resetMission(state, missionIndex = state.missionIndex) {
 
   state.stations = {};
   for (const s of STATIONS) {
-    state.stations[s.id] = { ammo: mission.startAmmoPerStation, heat: 0, jammed: false, disabled: false, wounded: false };
+    state.stations[s.id] = { ammo: mission.startAmmoPerStation, disabled: false, wounded: false };
   }
   state.activeStation = 'nose';
 

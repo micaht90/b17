@@ -12,10 +12,12 @@ touch controls. Also works on desktop with mouse + keyboard.
 
 1. **Briefing** — study the target illustration. You'll need to recognize it
    later from the air.
-2. **Cruise / combat** — fighters attack from different directions. Each gun
+2. **Cruise / combat** — fighters attack from different directions. Spend time
+   in the cockpit, shift your head position to scan the frame and panel, then
+   move to the gun stations when the diagram calls out a threat. Each gun
    **station** (nose, top, ball, tail, left/right waist) covers one arc. Tap a
    station on the plane diagram (or press its number key) to man it, aim, and
-   fire. The diagram flashes red where fighters are attacking — switch there.
+   fire as long as you have ammo. The diagram flashes red where fighters are attacking — switch there.
    Any fighter you don't drive off damages the Fortress.
 3. **The decision** — the loaded plane sags below the flak belt. Choose:
    **dump fuel** (climb back, thin reserve), **jettison ammo** (climb back,
@@ -31,8 +33,9 @@ touch controls. Also works on desktop with mouse + keyboard.
 | Action | Touch | Desktop |
 |---|---|---|
 | Aim | drag in the view | move mouse |
-| Fire | hold the **FIRE** button | hold click / **Space** |
-| Switch station | tap the plane diagram | keys **1**–**6** |
+| Fire | press and hold in the gun view | hold click / **Space** |
+| Pilot head movement | drag the **HEAD** pad | arrow keys / mouse wheel |
+| Switch station | tap the plane diagram | keys **1**–**7** |
 | Menu / decision / drop | tap the button | click the button |
 
 ## Run it locally

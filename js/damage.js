@@ -46,7 +46,7 @@ export function applyHit(state, kind) {
     radioHit(state, 'fuel');
   } else if (location === 'gun') {
     const id = randomStation(state, (st) => !st.disabled);
-    if (id) { state.stations[id].disabled = true; state.stations[id].jammed = false; radioHit(state, 'gun'); }
+    if (id) { state.stations[id].disabled = true; radioHit(state, 'gun'); }
     else location = 'hull';
   } else if (location === 'gunner') {
     const id = randomStation(state, (st) => !st.wounded && !st.disabled);

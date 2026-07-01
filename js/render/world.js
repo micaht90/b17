@@ -369,8 +369,7 @@ function drawGunsAndReticle(ctx, state, vp) {
     drawFiftyCal(ctx, bx + off * Math.cos(ang + Math.PI / 2), by + off * Math.sin(ang + Math.PI / 2), ang, len, firing);
   }
 
-  const jam = st.jammed || st.disabled;
-  drawRingSight(ctx, cx, cy, jam ? COLORS.crosshairJam : COLORS.crosshair, currentSpread(state));
+  drawRingSight(ctx, cx, cy, st.disabled ? COLORS.crosshairDisabled : COLORS.crosshair, currentSpread(state));
 }
 
 // Pulsing edge arrows pointing toward arcs that have attacking fighters you're
@@ -420,7 +419,6 @@ function drawStationLabel(ctx, state, vp, arc) {
   ctx.font = `bold ${Math.max(13, H * 0.028)}px "Courier New", monospace`;
   ctx.fillText(`${STATION_BY_ID[state.activeStation].label.toUpperCase()} — ${BEARING[arc]}`, W / 2, H * 0.07);
   if (st.disabled) { ctx.fillStyle = COLORS.bad; ctx.fillText('GUN KNOCKED OUT', W / 2, H * 0.115); }
-  else if (st.jammed) { ctx.fillStyle = COLORS.warn; ctx.fillText('OVERHEATED — LET IT COOL', W / 2, H * 0.115); }
   else if (st.wounded) { ctx.fillStyle = COLORS.warn; ctx.fillText('GUNNER WOUNDED', W / 2, H * 0.115); }
   ctx.textAlign = 'left';
 }

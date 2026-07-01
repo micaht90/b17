@@ -1,6 +1,6 @@
 // Weighty-but-direct gunnery: heavy aim clamped to the gun's traverse, shot
-// spread that blooms with sustained fire/heat/recoil, and barrel overheating
-// with jams. Bullets hit where pointed (within spread) — no leading needed.
+// spread that blooms with sustained fire/recoil, and ammo limits. Bullets hit
+// where pointed (within spread) — no leading needed.
 
 import { GUN, DAMAGE, GUNS, TWIN_RATE_MULT, CONTROL } from './config.js';
 import { clampToTraverse } from './stations.js';
@@ -27,7 +27,7 @@ export function updateCrosshair(state, vp, dt) {
 export function currentSpread(state) {
   const st = state.stations[state.activeStation];
   if (!st) return GUN.spreadPx;
-  let s = GUN.spreadPx + state.gunBloom + st.heat * GUN.spreadPerHeat;
+  let s = GUN.spreadPx + state.gunBloom;
   if (st.wounded) s *= DAMAGE.gunnerSpreadPenalty;
   if (state.evade.active > 0) s *= CONTROL.evadeAimPenalty;
   return s;
@@ -35,17 +35,10 @@ export function currentSpread(state) {
 
 export function canFire(state) {
   const st = state.stations[state.activeStation];
-  return !st.disabled && !st.jammed && st.ammo > 0;
+  return !st.disabled && st.ammo > 0;
 }
 
 export function updateFiring(state, vp, dt, firing) {
-  // Cool all guns; clear jams once cooled enough.
-  for (const id in state.stations) {
-    const st = state.stations[id];
-    st.heat = Math.max(0, st.heat - GUN.heatCoolPerSec * dt);
-    if (st.jammed && st.heat <= GUN.heatResumeAt) st.jammed = false;
-  }
-
   // Settle the recoil bloom and muzzle flash.
   state.gunBloom = Math.max(0, state.gunBloom - GUN.bloomDecayPerSec * dt);
   state.muzzleFlash = Math.max(0, state.muzzleFlash - dt);
@@ -59,20 +52,17 @@ export function updateFiring(state, vp, dt, firing) {
   if (!firing || !isGunView(state)) return;
 
   const st = state.stations[state.activeStation];
-  if (st.disabled || st.jammed) return;
+  if (st.disabled) return;
 
   const twin = GUNS[state.activeStation] && GUNS[state.activeStation].type === 'twin';
   const rate = GUN.fireRate * (twin ? TWIN_RATE_MULT : 1) * (st.wounded ? 1 - DAMAGE.gunnerFireRatePenalty : 1);
   while (state.fireCooldown <= 0) {
     state.fireCooldown += 1 / rate;
-    if (st.ammo <= 0 || st.jammed) break;
+    if (st.ammo <= 0) break;
     st.ammo -= 1;
-    st.heat = Math.min(1.2, st.heat + GUN.heatPerShot);
-    if (st.heat >= GUN.heatJamAt) st.jammed = true;
     state.gunBloom = Math.min(GUN.bloomMax, state.gunBloom + GUN.bloomPerShot);
     state.crosshair.y -= GUN.recoilKick * (0.6 + Math.random() * 0.6); // muzzle climb
     fireOneShot(state, vp);
-    if (st.jammed) break;
   }
 
   // Keep the muzzle climb within the gun's traverse.

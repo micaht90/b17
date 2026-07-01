@@ -155,13 +155,6 @@ export function drawPlaneDiagram(ctx, state, vp) {
     } else {
       ctx.fillStyle = active ? '#0b0e11' : (st.wounded ? COLORS.warn : COLORS.hud);
       ctx.fillText(s.short, x, y + dia.r * 0.32);
-      if (st.heat > 0.05) {
-        ctx.strokeStyle = st.jammed ? COLORS.bad : COLORS.heat;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(x, y, dia.r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, st.heat));
-        ctx.stroke();
-      }
     }
   }
   ctx.textAlign = 'left';
@@ -187,20 +180,14 @@ function drawFireButton(ctx, state, vp) {
   const st = state.stations[state.activeStation];
   if (!st) return;
   const disabled = st.disabled;
-  const jam = st.jammed;
-  ctx.fillStyle = disabled ? 'rgba(70,70,74,0.8)' : jam ? 'rgba(120,70,60,0.85)' : (st.ammo > 0 ? COLORS.fire : 'rgba(80,80,80,0.7)');
-  ctx.strokeStyle = jam ? COLORS.bad : COLORS.fireHot;
+  ctx.fillStyle = disabled ? 'rgba(70,70,74,0.8)' : (st.ammo > 0 ? COLORS.fire : 'rgba(80,80,80,0.7)');
+  ctx.strokeStyle = disabled ? COLORS.crosshairDisabled : COLORS.fireHot;
   ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(fb.cx, fb.cy, fb.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = jam ? COLORS.bad : COLORS.heat;
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.arc(fb.cx, fb.cy, fb.r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, st.heat));
-  ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.font = `bold ${fb.r * 0.3}px "Courier New", monospace`;
-  ctx.fillText(disabled ? 'OUT' : jam ? 'JAM' : 'FIRE', fb.cx, fb.cy - fb.r * 0.02);
+  ctx.fillText(disabled ? 'OUT' : 'FIRE', fb.cx, fb.cy - fb.r * 0.02);
   ctx.font = `bold ${fb.r * 0.24}px "Courier New", monospace`;
   ctx.fillText(`${st.ammo}`, fb.cx, fb.cy + fb.r * 0.42);
   ctx.textAlign = 'left';

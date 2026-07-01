@@ -17,7 +17,7 @@ export const COLORS = {
   tracer: '#ffe08a',
   tracerEnemy: '#ff6a4d',
   crosshair: '#ff5a4d',
-  crosshairJam: '#9aa3ad',
+  crosshairDisabled: '#9aa3ad',
   hud: '#d7e3ec',
   hudDim: '#7e8c99',
   panel: 'rgba(12,18,24,0.82)',
@@ -27,7 +27,6 @@ export const COLORS = {
   bad: '#e0584a',
   fire: '#c2453a',
   fireHot: '#ff6f5e',
-  heat: '#ff8a3d',
   smoke: 'rgba(40,40,44,0.55)',
 };
 
@@ -46,8 +45,8 @@ export const GAME = {
   buildingSpacing: 270,
 };
 
-// Weighty-but-direct gunnery: heavy aim, spread that blooms with heat/recoil,
-// overheating with jams. Bullets hit where pointed (no leading required).
+// Weighty-but-direct gunnery: heavy aim, recoil bloom, and ammo limits.
+// Bullets hit where pointed (no leading required).
 export const GUN = {
   aimLerp: 0.16,              // lower = heavier, slower-settling aim
   fireRate: 6,               // rounds/sec while held (single mount)
@@ -55,12 +54,7 @@ export const GUN = {
   bloomPerShot: 5,           // px added to transient bloom per shot
   bloomMax: 50,              // cap on transient bloom
   bloomDecayPerSec: 95,      // px/sec the bloom settles when not firing
-  spreadPerHeat: 22,         // extra px spread at full heat
   recoilKick: 2.5,           // subtle muzzle climb per shot (spread bloom is the real penalty)
-  heatPerShot: 0.02,         // ~50 sustained rounds to overheat
-  heatCoolPerSec: 0.34,      // cooling when not firing
-  heatJamAt: 1.0,            // overheats -> jam
-  heatResumeAt: 0.55,        // must cool to here before firing again
   fighterHp: 3,              // bullet hits to down a fighter
   hitRadiusScale: 0.62,      // fighter hit radius = size * this
 };
