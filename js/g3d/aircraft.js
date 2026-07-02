@@ -64,14 +64,16 @@ function triangleFin(height, length, material) {
 
 function propAssembly(radius, z, bladeColor = 0x111418) {
   const g = new THREE.Group();
+  // A running prop reads mostly as a translucent blur disc; the blades are
+  // thin and semi-transparent so a still frame never looks like an asterisk.
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(radius, 36),
-    new THREE.MeshBasicMaterial({ color: 0xd8e3e8, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xd8e3e8, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }),
   );
   disc.position.z = z;
-  const bladeMat = standard(bladeColor, { roughness: 0.42, metalness: 0.2 });
+  const bladeMat = new THREE.MeshBasicMaterial({ color: bladeColor, transparent: true, opacity: 0.5, depthWrite: false });
   for (let i = 0; i < 3; i++) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.16, radius * 1.55, 0.035), bladeMat);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.085, radius * 1.35, 0.03), bladeMat);
     b.position.z = z - 0.02;
     b.rotation.z = (i * Math.PI * 2) / 3;
     g.add(b);
