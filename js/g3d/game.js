@@ -6,7 +6,10 @@
 import * as THREE from 'three';
 import { createEngine } from './engine.js';
 import { createTerrain } from './terrain.js';
-import { makeFighter, makeBomber } from './aircraft.js';
+import { createFormation } from './formation.js';
+import { createAudio } from './audio.js';
+import { diagramLayout, drawB17Diagram } from './diagram.js';
+import { makeFighter } from './aircraft.js';
 import { drawGunFrame } from './frame2d.js';
 import { loadCockpit, draw as drawCockpit, throttleRectScreen, headPadRectScreen } from './cockpitPhoto.js';
 import { pushRadio, updateRadio, radioBandit, radioKill } from '../radio.js';
@@ -22,7 +25,9 @@ const eng = createEngine(glCanvas, { deck: false });
 const camera = eng.camera;
 camera.rotation.order = 'YXZ';
 eng.scene.add(camera);
-createTerrain(eng.scene);
+const terrain = createTerrain(eng.scene);
+let audio = null;                          // wired up after user gesture (see below)
+let formation = null;                      // living combat box, wired after import
 
 const mission = getMission(0);
 const CRUISE_RATE = 1.25;           // route units/sec at full throttle; gives the flight room to breathe
@@ -166,12 +171,10 @@ const gun = makeTwinFifty();
 camera.add(gun);
 
 // --- Formation + fighter pool -------------------------------------------------
-for (const p of [[-130, -35, -230], [165, 5, -380], [-320, 30, -640]]) {
-  const b = makeBomber(); b.position.set(...p); b.rotation.y = Math.PI; b.scale.setScalar(1.5); eng.scene.add(b);
-}
+formation = createFormation(eng.scene);
 const fighters = [];
 for (let i = 0; i < 7; i++) { const f = makeFighter(); f.visible = false; f.userData.alive = false; f.scale.setScalar(4.8); eng.scene.add(f); fighters.push(f); }
-function liveCount() { return fighters.filter((f) => f.userData.alive).length; }
+function liveCount() { return fighters.filter((f) => f.userData.alive && f.userData.phase !== 'death').length; }
 
 const _v = new THREE.Vector3();
 function spawnFromArc(arc) {
@@ -187,19 +190,90 @@ function spawnFromArc(arc) {
   f.userData.arc = arc;
   f.userData.phase = 'approach';
   f.userData.speed = 62 + Math.random() * 18;          // trackable closing speed
-  f.userData.vel = _v.copy(d).multiplyScalar(-f.userData.speed);
+  // Each fighter needs its OWN velocity vector — sharing the module scratch
+  // vector here aliased every fighter's motion together (and fireOneRound's
+  // getWorldPosition(_v) would corrupt it mid-flight).
+  f.userData.vel = new THREE.Vector3().copy(d).multiplyScalar(-f.userData.speed);
   f.userData.fired = false;
   f.userData.roll = 0;
   f.userData.hp = 1;
+  f.userData.burstT = 0.8 + Math.random() * 0.8;   // return-fire cadence
+  f.userData.burstLeft = 0; f.userData.burstGap = 0;
+  f.userData.smokeT = 0;
   // Aim close past the bomber so it bores right in, fires, then breaks away.
   f.userData.aim = new THREE.Vector3((Math.random() - 0.5) * 28, (Math.random() - 0.5) * 22, (Math.random() - 0.5) * 28);
   radioBandit(state, arc);
 }
 
 const bursts = [];
+const burstGeo = new THREE.SphereGeometry(1, 12, 8);   // shared; scaled per burst
 function burst(p, col = 0xffb13c, size = 7) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(size, 12, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true }));
+  const m = new THREE.Mesh(burstGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true }));
+  m.scale.setScalar(size);
   m.position.copy(p); m.userData.life = 0.5; eng.scene.add(m); bursts.push(m);
+}
+
+// --- Enemy tracer fire (3D rounds streaking at the ship) -----------------------
+const enemyTracerMat = new THREE.MeshBasicMaterial({ color: 0xffdf8a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+const enemyTracerGeo = new THREE.BoxGeometry(0.5, 0.5, 16);
+const enemyTracers = [];
+for (let i = 0; i < 24; i++) {
+  const t = new THREE.Mesh(enemyTracerGeo, enemyTracerMat);
+  t.visible = false; t.userData = { live: false, vel: new THREE.Vector3(), life: 0 };
+  eng.scene.add(t); enemyTracers.push(t);
+}
+const _dir = new THREE.Vector3();
+function spawnEnemyTracer(from, at) {
+  const t = enemyTracers.find((x) => !x.userData.live); if (!t) return;
+  _dir.copy(at).sub(from).normalize();
+  // Slight scatter so most rounds visibly whip past the fuselage.
+  _dir.x += (Math.random() - 0.5) * 0.06; _dir.y += (Math.random() - 0.5) * 0.06; _dir.normalize();
+  t.position.copy(from).addScaledVector(_dir, 12);
+  t.userData.vel.copy(_dir).multiplyScalar(760);
+  t.userData.life = 0.5; t.userData.live = true; t.visible = true;
+  t.lookAt(t.position.clone().add(_dir));
+}
+function updateEnemyTracers(dt) {
+  for (const t of enemyTracers) {
+    if (!t.userData.live) continue;
+    t.userData.life -= dt;
+    t.position.addScaledVector(t.userData.vel, dt);
+    // Retire rounds just before they pierce the camera: a 16-unit-long
+    // additive box crossing the near plane reads as a full-screen flash.
+    if (t.userData.life <= 0 || t.position.lengthSq() < 22 * 22 || t.position.lengthSq() > 1500 * 1500) { t.userData.live = false; t.visible = false; }
+  }
+}
+
+// --- Battle smoke (death spirals, damage trails) --------------------------------
+const smokePool = [];
+function ensureSmokePool() {
+  if (smokePool.length) return;
+  for (let i = 0; i < 44; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: flakSmokeTex, color: 0x14100d, transparent: true, opacity: 0.8, depthWrite: false }));
+    s.visible = false; s.userData = { live: false, life: 0, max: 1, grow: 1 };
+    eng.scene.add(s); smokePool.push(s);
+  }
+}
+function spawnSmoke(pos, size, life = 1.3, color = 0x14100d, opacity = 0.75) {
+  ensureSmokePool();
+  const s = smokePool.find((x) => !x.userData.live); if (!s) return;
+  s.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4));
+  s.material.color.setHex(color);
+  s.material.opacity = opacity;
+  s.scale.setScalar(size);
+  s.userData = { live: true, life, max: life, grow: size * 0.9, alpha: opacity };
+  s.visible = true;
+}
+function updateSmoke(dt) {
+  for (const s of smokePool) {
+    if (!s.userData.live) continue;
+    s.userData.life -= dt;
+    const a = Math.max(0, s.userData.life / s.userData.max);
+    s.scale.addScalar(s.userData.grow * dt);
+    s.position.y += 6 * dt; s.position.z += 14 * dt;
+    s.material.opacity = s.userData.alpha * a;
+    if (s.userData.life <= 0) { s.userData.live = false; s.visible = false; }
+  }
 }
 
 const flakBursts = [];
@@ -207,6 +281,7 @@ const flakSmokeTex = makeFlakTexture();
 const flakSmokeBase = new THREE.SpriteMaterial({ map: flakSmokeTex, color: 0x171817, transparent: true, opacity: 0.92, depthWrite: false });
 const flakFlashBase = new THREE.SpriteMaterial({ map: flakSmokeTex, color: 0xffc56a, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
 const flakSparkMat = new THREE.MeshBasicMaterial({ color: 0xffd79a, transparent: true, opacity: 0.9, depthWrite: false });
+const flakSparkGeo = new THREE.SphereGeometry(1, 6, 4);   // shared; scaled per spark
 
 function makeFlakTexture() {
   const N = 128, r = N / 2;
@@ -268,7 +343,8 @@ function spawnFlakBurst(close = false) {
 
   const sparks = close ? 14 : 7;
   for (let i = 0; i < sparks; i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(close ? 1.4 : 1.0, 6, 4), flakSparkMat.clone());
+    const m = new THREE.Mesh(flakSparkGeo, flakSparkMat.clone());
+    m.scale.setScalar(close ? 1.4 : 1.0);
     const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.35, Math.random() - 0.5).normalize();
     m.position.copy(dir).multiplyScalar(5 + Math.random() * 18);
     m.userData = { kind: 'spark', dir, speed: 26 + Math.random() * 42 };
@@ -278,6 +354,8 @@ function spawnFlakBurst(close = false) {
   eng.scene.add(g);
   flakBursts.push(g);
   state.flakFlash = Math.max(state.flakFlash || 0, close ? 0.65 : 0.28);
+  if (close) state.shake = Math.min(1, (state.shake || 0) + 0.4);
+  if (audio) audio.flak(close);
 }
 
 function spawnFlakSalvo(count, close = false) {
@@ -592,72 +670,47 @@ function switchTo(id) {
   gun.visible = !s.pilot;
 }
 
-// --- Plane-diagram station selector (drawn on the overlay, tappable) ----------
+// --- Plane-diagram station selector (accurate B-17 top view, tappable) --------
 let diagramHotspots = [];
-const DIAG_POS = {                                  // normalized within the diagram box
-  nose: [0.5, 0.06], pilot: [0.5, 0.2], top: [0.5, 0.36], ball: [0.5, 0.52],
-  waistL: [0.26, 0.6], waistR: [0.74, 0.6], tail: [0.5, 0.93],
-};
 function threatStations() {
   const set = new Set();
   for (const f of fighters) if (f.userData.alive && f.userData.phase === 'approach') set.add(ARC_STATION[f.userData.arc]);
   return set;
 }
 function drawPlaneDiagram(ctx, W, H, t) {
-  const DW = Math.max(120, Math.min(W * 0.2, 200));
-  const DH = DW * 1.9;
-  const ox = 12, oy = H - DH - 12;
-  diagramHotspots = [];
-
-  ctx.save();
-  ctx.fillStyle = 'rgba(8,12,16,0.5)'; rr(ctx, ox - 6, oy - 6, DW + 12, DH + 12, 12); ctx.fill();
-
-  // B-17 plan-view silhouette (nose up).
-  const cx = ox + DW / 2;
-  ctx.fillStyle = 'rgba(150,165,178,0.5)'; ctx.strokeStyle = 'rgba(190,205,218,0.7)'; ctx.lineWidth = 2;
-  // fuselage
-  ctx.beginPath(); ctx.ellipse(cx, oy + DH * 0.5, DW * 0.09, DH * 0.46, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  // wings
-  ctx.fillRect(ox + DW * 0.04, oy + DH * 0.38, DW * 0.92, DH * 0.07);
-  ctx.strokeRect(ox + DW * 0.04, oy + DH * 0.38, DW * 0.92, DH * 0.07);
-  // tailplane
-  ctx.fillRect(ox + DW * 0.26, oy + DH * 0.86, DW * 0.48, DH * 0.05);
-  ctx.strokeRect(ox + DW * 0.26, oy + DH * 0.86, DW * 0.48, DH * 0.05);
-
-  const threats = threatStations();
-  const pulse = 0.5 + 0.5 * Math.sin(t * 6);
-  for (const id of Object.keys(DIAG_POS)) {
-    const [nx, ny] = DIAG_POS[id];
-    const sx = ox + nx * DW, sy = oy + ny * DH;
-    const rDot = Math.max(11, DW * 0.085);
-    const active = state.mode === id;
-    const threat = threats.has(id);
-    ctx.beginPath(); ctx.arc(sx, sy, rDot, 0, Math.PI * 2);
-    if (active) ctx.fillStyle = '#5fc77a';
-    else if (threat) ctx.fillStyle = `rgba(${230},${70 + pulse * 40},${60},${0.55 + pulse * 0.45})`;
-    else ctx.fillStyle = 'rgba(20,28,36,0.9)';
-    ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = active ? '#cfe' : threat ? '#ffd0c8' : 'rgba(150,170,185,0.8)'; ctx.stroke();
-    if (threat && !active) { ctx.beginPath(); ctx.arc(sx, sy, rDot + 3 + pulse * 4, 0, Math.PI * 2); ctx.strokeStyle = `rgba(230,80,60,${0.6 * (1 - pulse)})`; ctx.stroke(); }
-    ctx.fillStyle = active ? '#08110a' : '#dfeaf2';
-    ctx.font = `bold ${Math.max(8, DW * 0.07)}px "Courier New", monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(LABEL[id], sx, sy);
-    diagramHotspots.push({ id, sx, sy, r: rDot + 6 });
-  }
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#8aa0ad'; ctx.font = `bold ${Math.max(8, DW * 0.07)}px "Courier New", monospace`;
-  ctx.fillText('TAP A STATION', ox, oy - 10);
-  ctx.restore();
+  diagramHotspots = drawB17Diagram(ctx, diagramLayout(W, H), {
+    mode: state.mode,
+    threats: threatStations(),
+    pulse: 0.5 + 0.5 * Math.sin(t * 6),
+    t,
+  });
 }
-const LABEL = { nose: 'NOS', pilot: 'PLT', top: 'TOP', ball: 'BAL', waistL: 'LW', waistR: 'RW', tail: 'TAL' };
 const KEY_STATIONS = { Digit1: 'pilot', Digit2: 'nose', Digit3: 'top', Digit4: 'ball', Digit5: 'tail', Digit6: 'waistL', Digit7: 'waistR' };
 function diagramHit(x, y) {
-  for (const h of diagramHotspots) { if (Math.hypot(x - h.sx, y - h.sy) <= h.r) return h.id; }
-  return null;
+  // Nearest hotspot within reach (dots can crowd on the accurate silhouette).
+  let best = null, bestD = Infinity;
+  for (const h of diagramHotspots) {
+    const d = Math.hypot(x - h.sx, y - h.sy);
+    if (d <= h.r && d < bestD) { best = h.id; bestD = d; }
+  }
+  return best;
 }
 
 // --- Input --------------------------------------------------------------------
 const raycaster = new THREE.Raycaster();
+
+// Audio wakes on the first user gesture anywhere (browser autoplay policy).
+// pointerup/keydown are the activation-granting events on touch/keyboard —
+// pointerdown alone does not unlock audio on iOS.
+function ensureAudio() {
+  if (!audio) audio = createAudio();
+  audio.init();
+  if (state.phase === 'cruise') audio.engineStart();
+}
+addEventListener('pointerdown', ensureAudio, { capture: true });
+addEventListener('pointerup', ensureAudio, { capture: true });
+addEventListener('keydown', ensureAudio, { capture: true });
+
 let dragging = false, lastX = 0, lastY = 0, moved = 0, pid = null, onThrottle = false, onDiagram = false, onHeadPad = false;
 const SENS = 0.0035;
 function inThrottle(x, y) { const r = throttleRectScreen(W, H); return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
@@ -746,12 +799,13 @@ function endTrigger() { if (state.gun) state.gun.trigger = false; }
 function fire() {
   const g = state.gun;
   if (!g || state.phase !== 'cruise' || state.mode === 'pilot') return false;
-  if (g.ammo < GUNPLAY.roundsPerCycle) { g.emptyClick = 0.18; g.trigger = false; return false; }
+  if (g.ammo < GUNPLAY.roundsPerCycle) { g.emptyClick = 0.18; g.trigger = false; if (audio) audio.gunEmpty(); return false; }
 
   g.ammo -= GUNPLAY.roundsPerCycle;
   g.recoil = Math.min(1, g.recoil + GUNPLAY.recoilKick);
   g.spread = GUNPLAY.spreadBase + g.recoil * GUNPLAY.spreadRecoil;
   state.fireFx = 0.08;
+  if (audio) audio.shot();
 
   let anyHit = false;
   for (const off of [-1, 1]) anyHit = fireOneRound(off, g.spread) || anyHit;
@@ -775,7 +829,8 @@ function fireOneRound(side, spread) {
   for (const h of hits) {
     let o = h.object;
     while (o && fighters.indexOf(o) === -1) o = o.parent;
-    if (o && o.userData.alive) { target = o; break; }
+    // Falling wrecks don't soak rounds or give false hit feedback.
+    if (o && o.userData.alive && o.userData.phase !== 'death') { target = o; break; }
   }
   if (!target) return false;
 
@@ -788,14 +843,18 @@ function fireOneRound(side, spread) {
     if (state.gun.sparks.length > 10) state.gun.sparks.shift();
   }
 
-  if (target.userData.hp <= 0) {
-    target.userData.alive = false;
-    target.visible = false;
-    burst(target.position, 0xffb13c, 8);
+  if (target.userData.hp <= 0 && target.userData.phase !== 'death') {
+    // Mortal blow: flames + a falling, smoking spiral (kill counts now).
+    target.userData.phase = 'death';
+    target.userData.deathT = 1.5 + Math.random() * 0.9;
+    target.userData.smokeT = 0;
+    burst(target.position, 0xff9a3c, 5);
     state.kills++;
     radioKill(state);
+    if (audio) audio.explosion(Math.min(1, target.position.length() / 420));
   } else if (Math.random() < 0.35) {
     burst(target.position, 0xffd36c, 2.4);
+    if (audio) audio.hitSpark();
   }
   return true;
 }
@@ -854,10 +913,12 @@ function takeOff() {
   state._waves = new Set(); state._warned = {}; state._flakT = 0; state._flakVisualT = 0; state.flakFlash = 0;
   for (const f of fighters) { f.userData.alive = false; f.visible = false; }
   for (const b of flakBursts.splice(0)) eng.scene.remove(b);
-  if (city) { eng.scene.remove(city); city = null; factory = null; }
+  if (city) { eng.scene.remove(city); disposeGroup(city); city = null; factory = null; }
   camera.fov = 68; camera.updateProjectionMatrix();
   screenEl.style.display = 'none';
   switchTo('pilot');
+  if (formation) formation.setCombat(true);
+  if (audio) { audio.uiClick(); audio.engineStart(); }
   pushRadio(state, 'Wheels up — climbing out. Watch your throttle.', 'info');
 }
 function enterBombRun() {
@@ -866,6 +927,7 @@ function enterBombRun() {
   for (const f of fighters) { f.userData.alive = false; f.visible = false; }
   camera.rotation.set(-Math.PI / 2, 0, 0, 'YXZ');     // look straight down
   camera.fov = 76; camera.updateProjectionMatrix();
+  if (formation) formation.setCombat(false);
   city = makeCity(); eng.scene.add(city);
   state.bomb = { dropped: false, result: null, speed: 76, t: 0 };
   dropBtn.style.display = 'block';
@@ -879,6 +941,7 @@ function dropBombs() {
   const hit = dist < 0.16 && Math.abs(_v.z) < 1;
   b.result = { hit, accuracy: hit ? Math.max(0, 1 - dist / 0.16) : 0 };
   factory.getWorldPosition(_v); burst(_v.clone().add(new THREE.Vector3(0, 20, 0)), hit ? 0xffd14a : 0xcccccc, 14);
+  if (audio) { audio.bombAway(); setTimeout(() => audio && audio.bombHit(), 2100); }
   pushRadio(state, hit ? 'Bombs away — direct hit on the works!' : 'Bombs away — we missed the target!', hit ? 'info' : 'alert');
   setTimeout(() => enterResults(true), 1800);
 }
@@ -895,7 +958,9 @@ function enterResults(reached) {
   if (survived) { const sv = Math.round((s?.survivalBonus || 600) * state.health / 100); const fu = Math.round((s?.fuelBonus || 4) * state.fuel); score += sv + fu; rows.push(`Made it home (${Math.round(state.health)}% hull) — +${sv}`, `Fuel reserve (${Math.round(state.fuel)}%) — +${fu}`); }
   state.won = survived; state.result = { score, targetHit: !!(r && r.hit) };
   state.phase = 'results'; dropBtn.style.display = 'none';
-  if (city) { eng.scene.remove(city); city = null; factory = null; }
+  if (formation) formation.setCombat(false);
+  if (audio) audio.engineStop();
+  if (city) { eng.scene.remove(city); disposeGroup(city); city = null; factory = null; }
   screenEl.style.display = 'flex';
   screenEl.innerHTML = `<h1 style="color:${survived ? '#5fc77a' : '#e0584a'}">${survived ? 'MISSION COMPLETE' : 'FORTRESS LOST'}</h1>
     <h2>${state.result.targetHit ? 'Target destroyed' : 'Target survived'}</h2>
@@ -914,6 +979,7 @@ addEventListener('resize', resizeOverlay); resizeOverlay();
 let cockpitReady = false;
 let last = performance.now();
 let clock = 0;
+let _lastThrottleSent = -1;
 function tick(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
   eng.updateClouds(dt, state.throttle);
@@ -926,6 +992,16 @@ function tick(now) {
     camera.rotation.y = state.base.yaw + (pilot ? 0 : state.lookYaw);
     camera.rotation.x = state.base.pitch + (pilot ? 0 : state.lookPitch) + (pilot ? state.climb * 0.16 : 0);
     state.lookDX = state.lookYaw; state.lookDY = state.lookPitch;
+  }
+  // Screen shake: firing recoil buzz + hard knocks from damage/flak.
+  state.shake = Math.max(0, (state.shake || 0) - dt * 2.4);
+  const shakeAmt = state.shake + (state.gun && state.gun.trigger && state.gun.ammo > 0 && state.mode !== 'pilot' ? 0.055 : 0);
+  // Only in cruise: the camera is re-based from base+look every cruise frame,
+  // so the jitter can't accumulate. (In the bomb run the rotation is set once
+  // at entry — adding random deltas there would random-walk the sight.)
+  if (shakeAmt > 0 && state.phase === 'cruise') {
+    camera.rotation.x += (Math.random() - 0.5) * 0.011 * shakeAmt * 2;
+    camera.rotation.y += (Math.random() - 0.5) * 0.011 * shakeAmt * 2;
   }
   updateGun(dt);
   state.heading = Math.round(((-camera.rotation.y * 180 / Math.PI) % 360 + 360) % 360);
@@ -947,8 +1023,15 @@ function tick(now) {
     }
   }
   updateFighters(dt);
+  updateEnemyTracers(dt);
+  updateSmoke(dt);
   updateFlak(dt);
-  for (let i = bursts.length - 1; i >= 0; i--) { const b = bursts[i]; b.userData.life -= dt; b.scale.multiplyScalar(1 + dt * 4); b.material.opacity = Math.max(0, b.userData.life / 0.5); if (b.userData.life <= 0) { eng.scene.remove(b); bursts.splice(i, 1); } }
+  if (terrain && terrain.update) terrain.update(dt, state.phase === 'bombrun' ? 76 / 60 : state.phase === 'cruise' ? state.throttle : 0.5);
+  if (formation) formation.update(dt, { speed: state.throttle });
+  // Only retune the engine bed when the throttle actually moves — calling
+  // setThrottle every frame floods the audio thread with automation events.
+  if (audio && Math.abs(state.throttle - _lastThrottleSent) > 0.002) { _lastThrottleSent = state.throttle; audio.setThrottle(state.throttle); }
+  for (let i = bursts.length - 1; i >= 0; i--) { const b = bursts[i]; b.userData.life -= dt; b.scale.multiplyScalar(1 + dt * 4); b.material.opacity = Math.max(0, b.userData.life / 0.5); if (b.userData.life <= 0) { eng.scene.remove(b); b.material.dispose(); bursts.splice(i, 1); } }
 
   eng.render();
   drawOverlay();
@@ -984,14 +1067,43 @@ function updateGun(dt) {
   ringMat.color.setHex(targetColor);
 }
 
-// Realistic fighter passes: curved approach, fire on the pass, break away.
+// Realistic fighter passes: curved approach, guns blazing on the run-in,
+// break away — or a burning, smoking spiral down when you get them.
 const _desired = new THREE.Vector3(), _tmp = new THREE.Vector3();
 function updateFighters(dt) {
   for (const f of fighters) {
     const u = f.userData; if (!u.alive) continue;
     const dist = f.position.length();
+
+    if (u.phase === 'death') {
+      // Falling, burning, trailing smoke; ends in a fireball.
+      u.deathT -= dt;
+      u.vel.y -= 85 * dt;
+      u.vel.multiplyScalar(1 - 0.25 * dt);
+      f.position.addScaledVector(u.vel, dt);
+      u.roll += dt * 6;
+      f.rotateZ(dt * 6);
+      u.smokeT -= dt;
+      if (u.smokeT <= 0) { u.smokeT = 0.055; spawnSmoke(f.position, 6 + Math.random() * 4); if (Math.random() < 0.4) spawnSmoke(f.position, 3, 0.35, 0xff8a30, 0.9); }
+      if (u.deathT <= 0 || f.position.y < -940) {
+        u.alive = false; f.visible = false;
+        burst(f.position, 0xffb13c, 10);
+        for (let i = 0; i < 4; i++) spawnSmoke(f.position, 10 + i * 3, 1.8);
+      }
+      continue;
+    }
+
     if (u.phase === 'approach') {
       _desired.copy(u.aim).sub(f.position).normalize().multiplyScalar(u.speed);
+      // Guns winking on the run-in: visible tracers streak past the ship.
+      if (dist < 300 && state.phase === 'cruise') {
+        u.burstT -= dt;
+        if (u.burstT <= 0) { u.burstT = 0.9 + Math.random() * 0.9; u.burstLeft = 3 + (Math.random() * 2 | 0); u.burstGap = 0; }
+        if (u.burstLeft > 0) {
+          u.burstGap -= dt;
+          if (u.burstGap <= 0) { u.burstGap = 0.07; u.burstLeft--; spawnEnemyTracer(f.position, camera.position); }
+        }
+      }
       if (dist < 150 && !u.fired) {
         u.fired = true;
         if (state.phase === 'cruise') damage(3 + Math.random() * 2, 'Fighter pass — we\'re hit!');
@@ -1004,6 +1116,8 @@ function updateFighters(dt) {
       _desired.copy(u.aim).sub(f.position).normalize().multiplyScalar(u.speed * 1.1);
       if (dist > 600) { u.alive = false; f.visible = false; continue; }
     }
+    // Damaged fighters stream thin smoke.
+    if (u.hp < 0.7 && Math.random() < dt * 9) spawnSmoke(f.position, 3.2, 0.7, 0x1c1c1e, 0.5);
     // Steer velocity toward desired (limited turn rate) -> curved path.
     const turn = 1 - Math.exp(-dt * 2.2);
     u.vel.lerp(_desired, turn);
@@ -1057,7 +1171,13 @@ function updateCruise(dt) {
   if (state.position >= mission.distance) enterBombRun();
 }
 
-function damage(n, msg) { state.health = Math.max(0, state.health - n); state.hitFlash = Math.min(1, state.hitFlash + 0.6); if (msg) pushRadio(state, msg, 'alert'); }
+function damage(n, msg) {
+  state.health = Math.max(0, state.health - n);
+  state.hitFlash = Math.min(1, state.hitFlash + 0.6);
+  state.shake = Math.min(1, (state.shake || 0) + 0.55);
+  if (audio) audio.damage();
+  if (msg) pushRadio(state, msg, 'alert');
+}
 
 function updateFlak(dt) {
   for (let i = flakBursts.length - 1; i >= 0; i--) {
@@ -1080,9 +1200,22 @@ function updateFlak(dt) {
     }
     if (g.userData.life <= 0) {
       eng.scene.remove(g);
+      for (const child of g.children) if (child.material) child.material.dispose();   // clones only; geometry is shared
       flakBursts.splice(i, 1);
     }
   }
+}
+
+// Free the GPU resources of a throwaway group (the bomb-run city is rebuilt
+// fresh every run; without this, FLY AGAIN leaks its geometry each mission).
+function disposeGroup(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (o.material.map) o.material.map.dispose();
+      o.material.dispose();
+    }
+  });
 }
 
 function updateBombRun(dt) {
